@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>基地分析圖產生器 Site Analysis Generator</title>
+<style>
+:root{--ink:#1f2a33;--acc:#c0392b;--bg:#f4f2ee;--line:#d6d2ca;--font:"Noto Sans CJK TC","Noto Sans TC","Microsoft JhengHei","PingFang TC","Noto Serif CJK TC",sans-serif}
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);font-size:14px}
+header{background:var(--ink);color:#fff;padding:10px 16px;display:flex;align-items:baseline;gap:12px}
+header h1{font-size:18px;margin:0;font-weight:700}
+header span{opacity:.7;font-size:12px}
+#app{display:grid;grid-template-columns:340px 1fr;gap:0;min-height:calc(100vh - 44px)}
+aside{background:#fff;border-right:1px solid var(--line);overflow-y:auto;max-height:calc(100vh - 44px);padding:8px 12px 40px}
+details{border-bottom:1px solid var(--line);padding:6px 0}
+summary{font-weight:700;cursor:pointer;padding:4px 0}
+summary b{display:inline-block;background:var(--acc);color:#fff;border-radius:50%;width:20px;height:20px;text-align:center;line-height:20px;font-size:12px;margin-right:6px}
+label{display:block;margin:6px 0 2px;font-size:12px;color:#555}
+input[type=number],input[type=text],input[type=date],input[type=time],select,textarea{width:100%;padding:4px 6px;border:1px solid var(--line);border-radius:4px;font-family:inherit;font-size:13px}
+textarea{min-height:52px}
+.row{display:flex;gap:6px}.row>*{flex:1}
+button{font-family:inherit;font-size:13px;padding:5px 9px;border:1px solid #9aa3aa;background:#fff;border-radius:4px;cursor:pointer;margin:2px 0}
+button:hover{background:#eef1f3}
+button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.tools{display:flex;flex-wrap:wrap;gap:4px}
+.small{font-size:11px;color:#777;line-height:1.5}
+main{display:flex;flex-direction:column;min-width:0}
+#statusbar{background:#fff;border-bottom:1px solid var(--line);padding:6px 12px;font-size:13px;min-height:32px}
+#statusbar b{color:var(--acc)}
+#stageWrap{flex:1;overflow:auto;padding:12px;display:flex;justify-content:center;align-items:flex-start}
+#stage{max-width:100%;height:auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.15);cursor:crosshair}
+#empty{padding:60px;text-align:center;color:#888}
+#results{background:#fff;border-top:3px solid var(--ink);padding:10px 16px}
+#results h2{font-size:16px;margin:4px 0 10px}
+#gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:12px}
+.card{border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fafafa}
+.card img{width:100%;display:block;cursor:zoom-in}
+.card .cap{display:flex;justify-content:space-between;align-items:center;padding:6px 8px;font-size:13px}
+.chk{display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:12px}
+.chk label{display:flex;gap:4px;align-items:center;margin:0;color:#333}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.85);display:none;align-items:center;justify-content:center;z-index:10;cursor:zoom-out}
+#lightbox img{max-width:95vw;max-height:95vh}
+</style>
+</head>
+<body>
+<header><h1>基地分析圖產生器</h1><span>Site Analysis Generator ｜ 輸入座標自動產生，或上傳基地圖 → 標記 → 自動生成分析圖</span></header>
+<div id="app">
+<aside>
+ <details open id="geoBox"><summary><b>0</b>輸入 Google 地圖座標自動產生（需網路）</summary>
+  <label>座標或 Google 地圖網址</label>
+  <input id="gIn" type="text" placeholder="例：25.0336, 121.5648｜25°02'01.0&quot;N 121°33'53.3&quot;E｜貼上網址">
+  <div class="row"><div><label>範圍半徑</label><select id="gR"><option value="150">150 m</option><option value="250" selected>250 m</option><option value="400">400 m</option><option value="800">800 m</option></select></div>
+  <div><label>底圖</label><select id="gBase"></select></div></div>
+  <label>自動匯入 OpenStreetMap 圖層</label>
+  <div class="chk">
+   <label><input type="checkbox" id="gBldg" checked style="width:auto">建築輪廓／樓層</label><label><input type="checkbox" id="gRoad" checked style="width:auto">道路（三級）</label>
+   <label><input type="checkbox" id="gPed" checked style="width:auto">人行步道</label><label><input type="checkbox" id="gGreen" checked style="width:auto">綠地公園</label>
+   <label><input type="checkbox" id="gWater" checked style="width:auto">水體河川</label><label><input type="checkbox" id="gFac" checked style="width:auto">周邊設施</label>
+   <label><input type="checkbox" id="gZone" checked style="width:auto">土地使用</label><label><input type="checkbox" id="gElev" checked style="width:auto">高程（DEM）</label>
+   <label><input type="checkbox" id="gView" checked style="width:auto">自動景觀點</label>
+  </div>
+  <div class="row"><div><label>缺樓層時預設 (層)</label><input id="gDefF" type="number" value="4" min="1"></div><div><label>預設基地 寬×深 (m)</label><input id="gRect" type="text" value="40x30"></div></div>
+  <label style="display:flex;gap:6px;align-items:center"><input id="gDemo" type="checkbox" checked style="width:auto"> 基地內既有建築視為拆除（不計陰影）</label>
+  <button class="primary" id="btnGeo" style="width:100%;margin-top:6px">📍 依座標產生底圖並匯入</button>
+  <div id="gMsg" class="small" style="margin-top:6px"></div>
+  <div id="gSite"></div>
+  <p class="small">Google 地圖可在地點上按右鍵複製座標。因 Google 地圖瓦片需金鑰且條款不允許下載，底圖改用 Esri／OpenStreetMap 圖資，圖面會自動標示版權。只有此步驟需要網路，其餘功能離線可用。匯入的元素可用「刪除」「✎ 編輯屬性」修改。</p>
+ </details>
+ <details open><summary><b>1</b>專案與基地圖</summary>
+  <label>專案名稱</label><input id="pName" type="text" value="基地分析">
+  <label>上傳基地圖（地圖截圖、地籍圖、配置圖 PNG/JPG）</label>
+  <input id="fileImg" type="file" accept="image/*">
+  <div class="row" style="margin-top:6px"><button id="btnSample">載入範例基地</button></div>
+  <div class="row"><button id="btnSave">儲存專案 (.json)</button><button id="btnLoad">載入專案</button></div>
+  <input id="fileProj" type="file" accept=".json,application/json" style="display:none">
+  <p class="small">專案檔會連同圖片一起存成 JSON，下次可以接著標記。</p>
+ </details>
+ <details open><summary><b>2</b>比例尺・北向・位置</summary>
+  <div class="row"><div><label>比例 (公尺/像素)</label><input id="pMpp" type="number" step="0.001" value=""></div>
+  <div><label>北向角度 (°)</label><input id="pNorth" type="number" step="0.5" value="0"></div></div>
+  <div class="tools" style="margin-top:4px"><button data-tool="scale">📏 兩點量比例尺</button><button data-tool="north">🧭 兩點設北向</button></div>
+  <p class="small">比例尺：在圖上點已知長度的兩端（例如圖上的比例尺條、路寬），再輸入實際公尺數。<br>北向角度：圖面「正上方」順時針轉到真北的角度；正北朝上的地圖為 0。也可點兩點（先南後北）。</p>
+  <div class="row"><div><label>緯度 (°N)</label><input id="pLat" type="number" step="0.0001" value="25.03"></div>
+  <div><label>經度 (°E)</label><input id="pLon" type="number" step="0.0001" value="121.56"></div>
+  <div><label>時區 (UTC+)</label><input id="pTz" type="number" step="0.5" value="8"></div></div>
+ </details>
+ <details open><summary><b>3</b>標記基地與周邊元素</summary>
+  <div class="tools" id="toolBtns">
+   <button data-tool="site">🟥 基地範圍</button><button data-tool="road">🛣 道路</button><button data-tool="ped">🚶 人行動線</button>
+   <button data-tool="entryCar">🚗 車行出入口</button><button data-tool="entryPed">🚪 人行出入口</button><button data-tool="bldg">🏢 建築物</button>
+   <button data-tool="noise">🔊 噪音源</button><button data-tool="viewGood">👁 好景觀</button><button data-tool="viewBad">🚫 不良景觀</button>
+   <button data-tool="fac">📍 周邊設施</button><button data-tool="zone">🗺 使用分區</button><button data-tool="green">🌳 綠地</button>
+   <button data-tool="water">💧 水體</button><button data-tool="elev">⛰ 高程點</button><button data-tool="edit">✎ 編輯屬性</button><button data-tool="erase">✖ 刪除</button><button data-tool="none">✋ 停止</button>
+  </div>
+  <div id="attrBox" style="margin-top:6px"></div>
+  <div class="row" style="margin-top:6px"><button id="btnFinish">完成形狀 (Enter)</button><button id="btnUndo">復原 (Ctrl+Z)</button></div>
+  <p class="small">線與面：逐點點擊，按 Enter／雙擊／「完成形狀」結束；Esc 取消。點類元素點一下即可。「刪除」模式下點元素即可移除。</p>
+ </details>
+ <details><summary><b>4</b>分析參數</summary>
+  <label>☀ 日照分析日期 / 時間</label>
+  <div class="row"><input id="pDate" type="date" value="2026-12-22"><input id="pTime" type="time" value="10:00"></div>
+  <div class="row"><div><label>基地假設量體高度 (m，0=不畫)</label><input id="pMass" type="number" value="30"></div>
+  <div><label>每層樓高 (m)</label><input id="pFloorH" type="number" step="0.1" value="3.3"></div></div>
+  <label style="display:flex;gap:6px;align-items:center"><input id="pMulti" type="checkbox" checked style="width:auto"> 同時畫 09/12/15 時陰影</label>
+  <hr>
+  <label>🌬 風向資料來源</label>
+  <select id="pWindPreset"><option value="cwa">台灣季風一般風向（中央氣象署）</option><option value="taipei">台北盆地（冬東北／夏東～東北東）</option><option value="custom">自行輸入</option></select>
+  <div class="row"><div><label>冬季風來向</label><select id="pWinW"></select></div><div><label>夏季風來向</label><select id="pWinS"></select></div></div>
+  <div class="row"><div><label>冬季平均風速 m/s</label><input id="pWinWv" type="text" value=""></div><div><label>夏季平均風速 m/s</label><input id="pWinSv" type="text" value=""></div></div>
+  <label>風花圖頻率（選填，16 方位 N,NNE,NE…NNW，逗號分隔，%）</label>
+  <textarea id="pRoseW" placeholder="冬季，例：5,8,20,15,10,4,2,1,1,1,2,2,3,4,6,6"></textarea>
+  <textarea id="pRoseS" placeholder="夏季（同上格式）"></textarea>
+  <p class="small" id="windSrc"></p>
+  <hr>
+  <label>🔊 道路噪音參考值（距路 10 m 的 dB(A)，示意值，可改）</label>
+  <div class="row"><input id="pNMain" type="number" value="75" title="主要幹道"><input id="pNSec" type="number" value="68" title="次要道路"><input id="pNLane" type="number" value="60" title="巷道"></div>
+  <p class="small">依序：主要幹道／次要道路／巷道</p>
+  <label>👁 視野錐半角 (°)</label><input id="pCone" type="number" value="18">
+  <label>⛰ 等高線間距 (m)</label><input id="pCi" type="number" value="1" step="0.5">
+  <label>⬛ 圖底關係來源</label>
+  <select id="pFg"><option value="auto">自動（有畫建築用建築，否則用影像）</option><option value="drawn">只用標記的建築物</option><option value="image">由影像亮度判斷</option></select>
+  <div class="row"><div><label>影像暗度門檻 (0–255)</label><input id="pFgT" type="number" value="150"></div><div><label>&nbsp;</label><label style="display:flex;gap:4px;align-items:center"><input id="pFgInv" type="checkbox" style="width:auto">反轉</label></div></div>
+  <hr>
+  <label>SWOT（可留空，按「自動建議」依標記資料產生草稿）</label>
+  <textarea id="pS" placeholder="S 優勢"></textarea><textarea id="pW" placeholder="W 劣勢"></textarea>
+  <textarea id="pO" placeholder="O 機會"></textarea><textarea id="pT" placeholder="T 威脅"></textarea>
+  <button id="btnSwotAuto">自動建議 SWOT</button>
+ </details>
+ <details open><summary><b>5</b>生成與匯出</summary>
+  <div class="row"><div><label>🎨 圖面風格</label><select id="pTheme"><option value="minimal">淡雅灰白極簡</option><option value="paper">暖色紙質手繪</option><option value="night">深色夜間</option><option value="blueprint">藍圖</option></select></div>
+  <div><label>輸出解析度</label><select id="pRes"><option value="1">1x（快）</option><option value="2" selected>2x（建議）</option><option value="3">3x（印刷）</option></select></div></div>
+  <div class="chk" id="diagChecks" style="margin-top:6px"></div>
+  <button class="primary" id="btnGen" style="width:100%;margin-top:8px">▶ 生成分析圖</button>
+  <div class="row"><button id="btnZip">⬇ 全部匯出 (ZIP)</button><button id="btnBoard">⬇ 匯出整張圖版</button></div>
+ </details>
+</aside>
+<main>
+ <div id="statusbar">請在步驟 0 輸入座標自動產生、上傳基地圖，或按「載入範例基地」試用。</div>
+ <div id="stageWrap"><div id="empty">尚未載入基地圖</div><canvas id="stage" style="display:none"></canvas></div>
+ <section id="results"><h2>分析圖成果</h2><div id="gallery"><p class="small">按「生成分析圖」後會出現在這裡，每張都可單獨下載 PNG。</p></div></section>
+</main>
+</div>
+<div id="lightbox"><img alt=""></div>
+<script>
+"use strict";
+/* ======================== 基本資料 ======================== */
+const $=id=>document.getElementById(id);
+const DIRS=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+const DIRS_ZH=["北","北北東","東北","東北東","東","東南東","東南","南南東","南","南南西","西南","西南西","西","西北西","西北","北北西"];
+const ROAD={main:{n:"主要幹道",c:"#b8322a",w:10},sec:{n:"次要道路",c:"#e67e22",w:7},lane:{n:"巷道",c:"#d4ac0d",w:4}};
+const FAC={
+ mrt:{n:"捷運／軌道站",c:"#0b7285",s:"捷"}, bus:{n:"公車站",c:"#1971c2",s:"公"}, school:{n:"學校",c:"#7048e8",s:"學"},
+ park:{n:"公園綠地",c:"#2f9e44",s:"園"}, shop:{n:"商業／市場",c:"#e8590c",s:"商"}, med:{n:"醫療",c:"#c92a2a",s:"醫"},
+ civic:{n:"公共／機關",c:"#5f3dc4",s:"機"}, culture:{n:"文化／宗教",c:"#ae3ec9",s:"文"}, res:{n:"住宅聚落",c:"#868e96",s:"住"}, parking:{n:"停車場",c:"#495057",s:"P"}
+};
+/* 常見都市計畫圖配色（示意） */
+const ZONE={res:{n:"住宅區",c:"#f7e463"},com:{n:"商業區",c:"#ef5b5b"},ind:{n:"工業區",c:"#b197fc"},park:{n:"公園／綠地用地",c:"#69db7c"},
+ school:{n:"學校用地",c:"#74c0fc"},civic:{n:"機關／公共設施用地",c:"#a9a9a9"},agri:{n:"農業區",c:"#c0eb75"},river:{n:"河川區",c:"#99e9f2"}};
+const WIND_PRESETS={
+ cwa:{w:2,s:10,src:"冬季東北季風（約10月～翌年4月）、夏季西南季風（約6月中～9月中）。出處：中央氣象署數位科普網〈隨季節變換的風—季風〉https://pweb.cwa.gov.tw/PopularScience/wt/wt_3.html（全台一般性風向，非單一測站統計）"},
+ taipei:{w:2,s:3,src:"冬季北部以東北風為主、經基隆河谷進入臺北盆地（TCCIP 臺灣氣候變遷推估資訊與調適知識平台）；夏季盆地內多數測站以東～東北東風為主（2011–2020 年 28 個氣象站 6–9 月統計，〈台北盆地的夏季風紋與溫度分佈初探〉doi:10.31235/osf.io/xa8wj）。各測站仍有差異。"},
+ custom:{w:null,s:null,src:"使用者自行輸入。建議至中央氣象署 CODiS 氣候觀測資料查詢服務下載最近測站的風向統計。"}
+};
+const DIAGS=[
+ {k:"base",t:"基地位置圖",e:"SITE PLAN"},
+ {k:"sun",t:"日照分析・太陽軌跡",e:"SUN PATH & SHADOW"},
+ {k:"wind",t:"風向・季風分析",e:"WIND / MONSOON"},
+ {k:"circ",t:"動線・交通可及性分析",e:"CIRCULATION & ACCESS"},
+ {k:"noise",t:"噪音分析",e:"NOISE"},
+ {k:"view",t:"景觀視野分析",e:"VIEWS"},
+ {k:"fac",t:"周邊機能・土地使用分析",e:"CONTEXT & LAND USE"},
+ {k:"fg",t:"圖底關係（紋理）分析",e:"FIGURE-GROUND"},
+ {k:"green",t:"綠地・水系分析",e:"GREEN & BLUE"},
+ {k:"topo",t:"地形・高程分析",e:"TOPOGRAPHY"},
+ {k:"swot",t:"綜合分析・SWOT",e:"SYNTHESIS / SWOT"}
+];
+
+/* ======================== 狀態 ======================== */
+let IMG=null;
+let P=newProject();
+let tool="none", draft=[], scaleTmp=[], northTmp=[];
+let OUT=[];
+function newProject(){return {name:"基地分析",img:null,mpp:null,north:0,lat:25.03,lon:121.56,tz:8,site:[],items:[],params:{}};}
+
+/* ======================== 天文：NOAA 太陽位置演算法（Meeus） ======================== */
+const RAD=Math.PI/180, DEG=180/Math.PI;
+function solarPosition(y,mo,d,localMin,lat,lon,tz){
+ const jd=(Date.UTC(y,mo-1,d)+(localMin-tz*60)*60000)/86400000+2440587.5;
+ const T=(jd-2451545)/36525;
+ const L0=((280.46646+T*(36000.76983+T*0.0003032))%360+360)%360;
+ const M=357.52911+T*(35999.05029-0.0001537*T);
+ const e=0.016708634-T*(0.000042037+0.0000001267*T);
+ const C=Math.sin(M*RAD)*(1.914602-T*(0.004817+0.000014*T))+Math.sin(2*M*RAD)*(0.019993-0.000101*T)+Math.sin(3*M*RAD)*0.000289;
+ const om=125.04-1934.136*T;
+ const lam=L0+C-0.00569-0.00478*Math.sin(om*RAD);
+ const eps0=23+(26+(21.448-T*(46.815+T*(0.00059-T*0.001813)))/60)/60;
+ const eps=eps0+0.00256*Math.cos(om*RAD);
+ const decl=Math.asin(Math.sin(eps*RAD)*Math.sin(lam*RAD));
+ const yy=Math.tan(eps*RAD/2)**2;
+ const eot=4*DEG*(yy*Math.sin(2*L0*RAD)-2*e*Math.sin(M*RAD)+4*e*yy*Math.sin(M*RAD)*Math.cos(2*L0*RAD)-0.5*yy*yy*Math.sin(4*L0*RAD)-1.25*e*e*Math.sin(2*M*RAD));
+ const tst=((localMin+eot+4*lon-60*tz)%1440+1440)%1440;
+ const ha=tst/4-180;
+ const phi=lat*RAD,h=ha*RAD;
+ const cz=Math.min(1,Math.max(-1,Math.sin(phi)*Math.sin(decl)+Math.cos(phi)*Math.cos(decl)*Math.cos(h)));
+ const alt=90-Math.acos(cz)*DEG;
+ const az=(Math.atan2(Math.sin(h),Math.cos(h)*Math.sin(phi)-Math.tan(decl)*Math.cos(phi))*DEG+180+360)%360;
+ let ref=0;const te=Math.tan(alt*RAD);
+ if(alt>85)ref=0;else if(alt>5)ref=58.1/te-0.07/te**3+0.000086/te**5;
+ else if(alt>-0.575)ref=1735+alt*(-518.2+alt*(103.4+alt*(-12.79+alt*0.711)));else ref=-20.772/te;
+ return {alt:alt+ref/3600,geoAlt:alt,az,decl:decl*DEG,eot};
+}
+function sunEvents(y,mo,d,lat,lon,tz){
+ let rise=null,set=null,noon=null,maxA=-99,prev=solarPosition(y,mo,d,0,lat,lon,tz).geoAlt;
+ for(let m=1;m<=1440;m++){
+  const a=solarPosition(y,mo,d,m,lat,lon,tz).geoAlt;
+  if(prev<-0.833&&a>=-0.833)rise=m-1+(-0.833-prev)/(a-prev);
+  if(prev>=-0.833&&a<-0.833)set=m-1+(prev+0.833)/(prev-a);
+  if(a>maxA){maxA=a;noon=m;}prev=a;
+ }
+ return {rise,set,noon,maxAlt:maxA};
+}
+const fmtMin=m=>{if(m==null)return "—";const r=Math.round(m);return String(Math.floor(r/60)).padStart(2,"0")+":"+String(r%60).padStart(2,"0");};
+window.solarPosition=solarPosition;window.sunEvents=sunEvents;
+
+/* ======================== 幾何工具 ======================== */
+const mpp=()=>P.mpp||0.5;
+const m2px=m=>m/mpp();
+function bearingVec(az){const t=(az+P.north)*RAD;return [Math.sin(t),-Math.cos(t)];}
+function polyCentroid(pts){
+ if(!pts.length)return IMG?[IMG.width/2,IMG.height/2]:[0,0];
+ const avg=()=>{let x=0,y=0;pts.forEach(p=>{x+=p[0];y+=p[1]});return [x/pts.length,y/pts.length];};
+ if(pts.length<3)return avg();
+ let a=0,cx=0,cy=0;
+ for(let i=0;i<pts.length;i++){const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];const f=x1*y2-x2*y1;a+=f;cx+=(x1+x2)*f;cy+=(y1+y2)*f;}
+ if(Math.abs(a)<1e-9)return avg();
+ return [cx/(3*a),cy/(3*a)];
+}
+function polyArea(pts){let a=0;for(let i=0;i<pts.length;i++){const [x1,y1]=pts[i],[x2,y2]=pts[(i+1)%pts.length];a+=x1*y2-x2*y1;}return Math.abs(a)/2;}
+function inPoly(x,y,pts){let c=false;for(let i=0,j=pts.length-1;i<pts.length;j=i++){const [xi,yi]=pts[i],[xj,yj]=pts[j];if(((yi>y)!=(yj>y))&&(x<(xj-xi)*(y-yi)/(yj-yi)+xi))c=!c;}return c;}
+function distSeg(px,py,a,b){const dx=b[0]-a[0],dy=b[1]-a[1];const L=dx*dx+dy*dy;let t=L?((px-a[0])*dx+(py-a[1])*dy)/L:0;t=Math.max(0,Math.min(1,t));return Math.hypot(px-(a[0]+t*dx),py-(a[1]+t*dy));}
+function distPolyline(px,py,pts){if(pts.length==1)return Math.hypot(px-pts[0][0],py-pts[0][1]);let d=1e12;for(let i=0;i<pts.length-1;i++)d=Math.min(d,distSeg(px,py,pts[i],pts[i+1]));return d;}
+function distToSite(px,py){const s=P.site;if(s.length<3){const c=polyCentroid(s);return Math.hypot(px-c[0],py-c[1]);}if(inPoly(px,py,s))return 0;return distPolyline(px,py,[...s,s[0]]);}
+function bearingOf(dx,dy){let a=Math.atan2(dx,-dy)*DEG-P.north;return (a%360+360)%360;}
+function dirName(az){return DIRS_ZH[Math.round(az/22.5)%16];}
+const items=t=>P.items.filter(i=>i.type===t);
+function K(){return IMG?Math.max(IMG.width,IMG.height)/1400:1;}
+function polyPath(c,pts){c.beginPath();c.moveTo(...pts[0]);for(let i=1;i<pts.length;i++)c.lineTo(...pts[i]);c.closePath();}
+function linePath(c,pts){c.beginPath();c.moveTo(...pts[0]);for(let i=1;i<pts.length;i++)c.lineTo(...pts[i]);}
+function bbox(pts){const xs=pts.map(p=>p[0]),ys=pts.map(p=>p[1]);return [Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)];}
+const FONT=(getComputedStyle(document.documentElement).getPropertyValue("--font")||"sans-serif").trim();
+
+/* ======================== 介面 ======================== */
+function fillDirSelect(sel){sel.innerHTML=DIRS.map((d,i)=>`<option value="${i}">${DIRS_ZH[i]} ${d}</option>`).join("");}
+fillDirSelect($("pWinW"));fillDirSelect($("pWinS"));
+function applyWindPreset(){const p=WIND_PRESETS[$("pWindPreset").value];if(p.w!=null){$("pWinW").value=p.w;$("pWinS").value=p.s;}$("windSrc").textContent="來源："+p.src;}
+$("pWindPreset").onchange=applyWindPreset;applyWindPreset();
+["pWinW","pWinS"].forEach(id=>$(id).addEventListener("change",()=>{$("pWindPreset").value="custom";$("windSrc").textContent="來源："+WIND_PRESETS.custom.src;}));
+$("diagChecks").innerHTML=DIAGS.map(d=>`<label><input type="checkbox" data-k="${d.k}" checked style="width:auto">${d.t}</label>`).join("");
+
+const ATTR={
+ road:`<label>道路等級</label><select id="aRoad"><option value="main">主要幹道</option><option value="sec">次要道路</option><option value="lane">巷道</option></select>
+  <div class="row"><div><label>名稱</label><input id="aName" type="text" placeholder="例：忠孝東路"></div><div><label>路寬 (m)</label><input id="aWidth" type="number" value="20"></div></div>
+  <label style="display:flex;gap:4px;align-items:center"><input id="aOneway" type="checkbox" style="width:auto">單行道（依繪製方向）</label>`,
+ ped:`<label>名稱（選填）</label><input id="aName" type="text" placeholder="例：騎樓、人行道">`,
+ entryCar:`<label>名稱</label><input id="aName" type="text" value="車行出入口">`,
+ entryPed:`<label>名稱</label><input id="aName" type="text" value="主要人行入口">`,
+ bldg:`<label>樓層數</label><input id="aFloors" type="number" value="5">`,
+ noise:`<div class="row"><div><label>名稱</label><input id="aName" type="text" value="噪音源"></div><div><label>距 10 m 音量 dB(A)</label><input id="aDb" type="number" value="70"></div></div>`,
+ viewGood:`<label>景觀名稱</label><input id="aName" type="text" value="景觀">`,
+ viewBad:`<label>名稱</label><input id="aName" type="text" value="不良景觀">`,
+ fac:`<label>設施類型</label><select id="aCat">${Object.entries(FAC).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join("")}</select><label>名稱</label><input id="aName" type="text" placeholder="例：市府站">`,
+ zone:`<label>分區</label><select id="aZone">${Object.entries(ZONE).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join("")}</select>`,
+ green:`<label>名稱（選填）</label><input id="aName" type="text" placeholder="例：中央公園">`,
+ water:`<label>名稱（選填）</label><input id="aName" type="text" placeholder="例：基隆河">`,
+ elev:`<label>高程 (m)</label><input id="aZ" type="number" value="10" step="0.1">`,
+ scale:`<p class="small">點兩點後輸入實際距離。</p>`,north:`<p class="small">先點南端、再點北端。</p>`,
+ site:`<p class="small">沿基地邊界逐點點擊，完成後按 Enter。重畫會取代舊的基地範圍。</p>`
+};
+const HINT={site:"畫基地範圍：逐點點擊，Enter 完成",road:"畫道路中心線：逐點點擊，Enter 完成",ped:"畫人行動線：逐點點擊，Enter 完成",bldg:"畫建築輪廓：逐點點擊，Enter 完成",zone:"畫使用分區範圍：逐點點擊，Enter 完成",green:"畫綠地範圍：逐點點擊，Enter 完成",water:"畫水體範圍：逐點點擊，Enter 完成",
+ entryCar:"點選車行出入口位置",entryPed:"點選人行出入口位置",noise:"點選噪音源位置",viewGood:"點選景觀目標（由基地中心看出去）",viewBad:"點選不良景觀位置",fac:"點選設施位置",elev:"點選高程點位置",
+ erase:"點選要刪除的元素",edit:"點選要修改屬性的元素（建築樓層、道路等級、名稱…）",scale:"點比例尺第 1 點",north:"點南端",none:"選擇左側工具開始標記"};
+const POLY_TOOLS=["site","road","ped","bldg","zone","green","water"];
+document.querySelectorAll("[data-tool]").forEach(b=>b.onclick=()=>setTool(b.dataset.tool));
+function setTool(t){
+ if(draft.length&&POLY_TOOLS.includes(tool))finishShape();
+ tool=t;draft=[];scaleTmp=[];northTmp=[];
+ document.querySelectorAll("[data-tool]").forEach(b=>b.classList.toggle("on",b.dataset.tool===t));
+ $("attrBox").innerHTML=ATTR[t]||"";
+ status(HINT[t]||"");render();
+}
+function status(s){$("statusbar").innerHTML=s+(IMG?` ｜ 比例 <b>${P.mpp?(+P.mpp).toFixed(3)+" m/px":"未設定（暫用 0.5 m/px）"}</b> ｜ 北向 <b>${P.north}°</b> ｜ 元素 ${P.items.length} 個`:"");}
+const val=id=>$(id)?$(id).value:null;
+
+/* ======================== 編輯畫布 ======================== */
+const stage=$("stage"),sctx=stage.getContext("2d");
+function setImage(src,cb){
+ const im=new Image();
+ im.onload=()=>{
+  const MAX=1800;let w=im.naturalWidth,h=im.naturalHeight,s=Math.min(1,MAX/Math.max(w,h));
+  const c=document.createElement("canvas");c.width=Math.round(w*s);c.height=Math.round(h*s);
+  c.getContext("2d").drawImage(im,0,0,c.width,c.height);
+  if(s<1&&P.imgScaled!==true&&(P.site.length||P.items.length)===0){/* 新圖縮放：無既有標記 */}
+  IMG=c;if(!P.img||s<1)P.img=c.toDataURL("image/jpeg",0.92);
+  stage.width=c.width;stage.height=c.height;stage.style.display="block";$("empty").style.display="none";
+  render();status(HINT[tool]);cb&&cb();
+ };
+ im.src=src;
+}
+$("fileImg").onchange=e=>{const f=e.target.files[0];if(!f)return;$("gSite").innerHTML="";$("gMsg").innerHTML="";GEO={hidden:[],cands:[],W:0,H:0};const r=new FileReader();r.onload=()=>{$("pName").value=f.name.replace(/\.[^.]+$/,"");P=Object.assign(newProject(),{name:$("pName").value});$("pMpp").value="";$("pNorth").value=0;$("gallery").innerHTML="";readParamsOnly();OUT=[];P.img=null;setImage(r.result);};r.readAsDataURL(f);};
+function evPt(e){const r=stage.getBoundingClientRect();return [(e.clientX-r.left)*stage.width/r.width,(e.clientY-r.top)*stage.height/r.height];}
+function handleClick(p){
+ if(!IMG)return;
+ if(tool==="scale"){scaleTmp.push(p);if(scaleTmp.length===2){const d=Math.hypot(scaleTmp[1][0]-scaleTmp[0][0],scaleTmp[1][1]-scaleTmp[0][1]);const m=parseFloat(prompt(`兩點相距 ${d.toFixed(1)} 像素，實際距離是幾公尺？`,"50"));if(m>0){P.mpp=m/d;$("pMpp").value=P.mpp.toFixed(4);}scaleTmp=[];status("比例尺已設定");}else status("點比例尺第 2 點");render();return;}
+ if(tool==="north"){northTmp.push(p);if(northTmp.length===2){const dx=northTmp[1][0]-northTmp[0][0],dy=northTmp[1][1]-northTmp[0][1];P.north=Math.round(((Math.atan2(dx,-dy)*DEG)%360+360)%360*10)/10;$("pNorth").value=P.north;northTmp=[];status("北向已設定");}else status("點北端");render();return;}
+ if(tool==="erase"){eraseAt(p);return;}
+ if(tool==="edit"){editAt(p);return;}
+ if(POLY_TOOLS.includes(tool)){draft.push(p);render();return;}
+ if(["entryCar","entryPed","noise","viewGood","viewBad","fac","elev"].includes(tool)){P.items.push(makeItem(tool,[p]));render();status(HINT[tool]);}
+}
+stage.addEventListener("click",e=>{if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();handleClick(evPt(e));});
+stage.addEventListener("dblclick",()=>{if(POLY_TOOLS.includes(tool)){draft.pop();finishShape();}});
+stage.addEventListener("mousemove",e=>{if(!IMG||!draft.length)return;render(evPt(e));});
+document.addEventListener("keydown",e=>{
+ const tg=e.target;if(tg.tagName==="TEXTAREA"||tg.tagName==="SELECT"||(tg.tagName==="INPUT"&&!["file","checkbox","button"].includes(tg.type)))return;
+ if(e.key==="Enter")finishShape();
+ if(e.key==="Escape"){draft=[];render();}
+ if(e.key==="z"&&(e.ctrlKey||e.metaKey)){undo();e.preventDefault();}
+});
+$("btnFinish").onclick=finishShape;$("btnUndo").onclick=undo;
+function undo(){if(draft.length)draft.pop();else P.items.pop();render();status("已復原");}
+function makeItem(t,pts){
+ const it={type:t,pts};
+ if(t==="road"){it.cls=val("aRoad")||"main";it.name=val("aName")||"";it.width=+val("aWidth")||12;it.oneway=$("aOneway")?$("aOneway").checked:false;}
+ if(["ped","entryCar","entryPed","viewGood","viewBad","green","water","noise","fac"].includes(t))it.name=val("aName")||"";
+ if(t==="bldg")it.floors=+val("aFloors")||3;
+ if(t==="noise")it.db=+val("aDb")||70;
+ if(t==="fac")it.cat=val("aCat")||"shop";
+ if(t==="zone")it.zone=val("aZone")||"res";
+ if(t==="elev")it.z=+val("aZ")||0;
+ return it;
+}
+function finishShape(){
+ if(!draft.length)return;
+ const need=(tool==="road"||tool==="ped")?2:3;
+ if(draft.length<need){status(`至少需要 ${need} 點`);return;}
+ if(tool==="site")P.site=draft.slice();else P.items.push(makeItem(tool,draft.slice()));
+ draft=[];render();status((tool==="site"?"基地範圍完成。":"已加入。")+HINT[tool]);
+}
+function eraseAt(p){
+ const tol=14*stage.width/stage.getBoundingClientRect().width;let best=-1,bd=1e9;
+ P.items.forEach((it,i)=>{let d;if(it.pts.length===1)d=Math.hypot(p[0]-it.pts[0][0],p[1]-it.pts[0][1]);else if(["road","ped"].includes(it.type))d=distPolyline(p[0],p[1],it.pts);else d=inPoly(p[0],p[1],it.pts)?tol*0.9:distPolyline(p[0],p[1],[...it.pts,it.pts[0]]);if(d<bd){bd=d;best=i;}});
+ if(best>=0&&bd<tol){P.items.splice(best,1);render();status("已刪除");}
+}
+function render(mouse){
+ if(!IMG)return;const c=sctx,k=K();
+ c.clearRect(0,0,stage.width,stage.height);c.drawImage(IMG,0,0);
+ const lw=Math.max(2,2*k);
+ P.items.forEach(it=>{
+  if(it.type==="zone"){polyPath(c,it.pts);c.fillStyle=ZONE[it.zone].c+"55";c.fill();}
+  if(it.type==="green"){polyPath(c,it.pts);c.fillStyle="rgba(47,158,68,.35)";c.fill();}
+  if(it.type==="water"){polyPath(c,it.pts);c.fillStyle="rgba(28,126,214,.35)";c.fill();}
+  if(it.type==="bldg"){polyPath(c,it.pts);c.fillStyle="rgba(40,40,40,.5)";c.fill();c.strokeStyle="#000";c.lineWidth=1;c.stroke();}
+ });
+ P.items.forEach(it=>{
+  if(it.type==="road"){linePath(c,it.pts);c.strokeStyle=ROAD[it.cls].c;c.lineWidth=ROAD[it.cls].w*k*0.6;c.globalAlpha=.8;c.stroke();c.globalAlpha=1;}
+  if(it.type==="ped"){linePath(c,it.pts);c.setLineDash([8*k,6*k]);c.strokeStyle="#1c7ed6";c.lineWidth=lw*1.3;c.stroke();c.setLineDash([]);}
+ });
+ if(P.site.length){polyPath(c,P.site);c.fillStyle="rgba(192,57,43,.18)";c.fill();c.strokeStyle="#c0392b";c.lineWidth=lw*1.5;c.setLineDash([10*k,5*k]);c.stroke();c.setLineDash([]);}
+ P.items.forEach(it=>{
+  if(it.pts.length!==1)return;const [x,y]=it.pts[0];
+  const mk=(col,txt)=>pin(c,x,y,col,txt,k,9);
+  if(it.type==="entryCar")mk("#b8322a","車");if(it.type==="entryPed")mk("#1c7ed6","人");
+  if(it.type==="noise")mk("#d9480f","噪");if(it.type==="viewGood")mk("#2b8a3e","景");if(it.type==="viewBad")mk("#495057","✕");
+  if(it.type==="fac")mk(FAC[it.cat].c,FAC[it.cat].s);
+  if(it.type==="elev"){mk("#8d6e63","▲");c.fillStyle="#3e2723";c.font=`bold ${12*k}px ${FONT}`;c.textAlign="center";c.fillText(it.z+"m",x,y-16*k);}
+ });
+ const pts=mouse?[...draft,mouse]:draft;
+ if(pts.length){c.beginPath();c.moveTo(...pts[0]);pts.slice(1).forEach(p=>c.lineTo(...p));c.strokeStyle="#ff00aa";c.lineWidth=lw;c.stroke();draft.forEach(p=>{c.beginPath();c.arc(p[0],p[1],4*k,0,7);c.fillStyle="#ff00aa";c.fill();});}
+ [...scaleTmp,...northTmp].forEach(p=>{c.beginPath();c.arc(p[0],p[1],6*k,0,7);c.fillStyle="#00a";c.fill();});
+ drawNorth(c,stage.width-50*k,60*k,k);
+ if(P.geo&&P.geo.attr){TH=TH||THEMES.minimal;drawAttr(c,stage.width,stage.height,k);}
+}
+
+/* ======================== 輸入同步 ======================== */
+const PARAM_IDS=["pDate","pTime","pMass","pFloorH","pWindPreset","pWinW","pWinS","pWinWv","pWinSv","pRoseW","pRoseS","pNMain","pNSec","pNLane","pCone","pCi","pFg","pFgT","pS","pW","pO","pT"];
+function readParamsOnly(){PARAM_IDS.forEach(i=>P.params[i]=$(i).value);P.params.pMulti=$("pMulti").checked;P.params.pFgInv=$("pFgInv").checked;}
+function readInputs(){
+ P.name=$("pName").value;P.mpp=parseFloat($("pMpp").value)||null;P.north=parseFloat($("pNorth").value)||0;
+ P.lat=parseFloat($("pLat").value);P.lon=parseFloat($("pLon").value);P.tz=parseFloat($("pTz").value);
+ readParamsOnly();
+}
+function syncInputs(){
+ $("pName").value=P.name||"";$("pMpp").value=P.mpp?(+P.mpp).toFixed(4):"";$("pNorth").value=P.north||0;$("pLat").value=P.lat;$("pLon").value=P.lon;$("pTz").value=P.tz;
+ for(const [k,v] of Object.entries(P.params||{})){if(!$(k))continue;if(k==="pMulti"||k==="pFgInv")$(k).checked=!!v;else if(v!=null)$(k).value=v;}
+ const wp=$("pWindPreset").value;$("windSrc").textContent="來源："+WIND_PRESETS[wp].src;
+}
+["pMpp","pNorth"].forEach(id=>$(id).addEventListener("change",()=>{readInputs();render();status("");}));
+$("btnSave").onclick=()=>{readInputs();download(new Blob([JSON.stringify(P)],{type:"application/json"}),(P.name||"site")+".json");};
+$("btnLoad").onclick=()=>$("fileProj").click();
+$("fileProj").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>loadProject(JSON.parse(r.result));r.readAsText(f);};
+function loadProject(obj,cb){P=Object.assign(newProject(),obj);P.params=P.params||{};syncInputs();OUT=[];if(P.img)setImage(P.img,cb);}
+/* ======================== 繪圖共用（v2：主題、特效、高解析） ======================== */
+const SANS='"Noto Sans CJK TC","Noto Sans TC","PingFang TC","Microsoft JhengHei","Heiti TC",sans-serif';
+const SERIF='"Noto Serif CJK TC","Noto Serif TC","Songti TC","PMingLiU","MingLiU",serif';
+const LATIN='"Helvetica Neue","Arial Nova",Arial,'+SANS;
+const THEMES={
+ minimal:{n:"淡雅灰白極簡",paper:"#f4f3ef",card:"#ffffff",ink:"#23282d",sub:"#6d737a",line:"#d8d4cc",accent:"#e8590c",
+  base:{filter:"grayscale(1) contrast(0.7) brightness(1.2)",alpha:0.5},bldg:"#dcd9d2",bldgStroke:"#b3ada3",bldgShadow:"rgba(60,50,40,.22)",
+  road:"#ffffff",roadEdge:"rgba(150,145,135,.45)",site:"#e03131",grain:0,dark:false,titleFont:SANS,heat:"multiply",vignette:0.07},
+ paper:{n:"暖色紙質手繪",paper:"#eee4cf",card:"#f8f1e2",ink:"#3a2e24",sub:"#7c6b57",line:"#cbbb98",accent:"#b5462f",
+  base:{filter:"grayscale(1) sepia(0.55) contrast(0.7) brightness(1.08)",alpha:0.42},bldg:"#dccdb0",bldgStroke:"#8f7b5c",bldgShadow:"rgba(90,60,30,.28)",
+  road:"#f7f0df",roadEdge:"rgba(120,95,60,.4)",site:"#b5462f",grain:0.1,dark:false,titleFont:SERIF,heat:"multiply",vignette:0.2,sketch:true},
+ night:{n:"深色夜間",paper:"#0f1216",card:"#181d23",ink:"#eef1f4",sub:"#98a2ad",line:"#2b323a",accent:"#ff7a59",
+  base:{filter:"grayscale(1) invert(1) contrast(0.8) brightness(0.5)",alpha:0.6},bldg:"#262c34",bldgStroke:"#424c58",bldgShadow:"rgba(0,0,0,.5)",
+  road:"#2f3740",roadEdge:"rgba(0,0,0,0)",site:"#ff6b6b",grain:0,dark:true,titleFont:SANS,heat:"screen",vignette:0.4},
+ blueprint:{n:"藍圖",paper:"#15385f",card:"#1b4574",ink:"#eaf3ff",sub:"#a6c1e4",line:"#3a679c",accent:"#ffd43b",
+  base:{filter:"grayscale(1) invert(1) contrast(0.9) brightness(0.75)",alpha:0.3},bldg:"rgba(150,195,255,.16)",bldgStroke:"rgba(205,228,255,.75)",bldgShadow:"rgba(0,10,30,.35)",
+  road:"rgba(120,170,230,.22)",roadEdge:"rgba(205,228,255,.4)",site:"#ffd43b",siteText:"#15385f",grain:0,dark:true,titleFont:SANS,heat:"screen",vignette:0.25,grid:true}
+};
+let TH=THEMES.minimal, RS=2;
+const hexA=(h,a)=>{if(h.startsWith("rgba"))return h;const v=[1,3,5].map(o=>parseInt(h.slice(o,o+2),16));return `rgba(${v[0]},${v[1]},${v[2]},${a})`;};
+function rr(c,x,y,w,h,r){c.beginPath();c.moveTo(x+r,y);c.arcTo(x+w,y,x+w,y+h,r);c.arcTo(x+w,y+h,x,y+h,r);c.arcTo(x,y+h,x,y,r);c.arcTo(x,y,x+w,y,r);c.closePath();}
+function softShadow(c,k,blur,oy,col){c.shadowColor=col||(TH.dark?"rgba(0,0,0,.55)":"rgba(40,30,20,.22)");c.shadowBlur=(blur||10)*k*RS;c.shadowOffsetX=0;c.shadowOffsetY=(oy==null?3:oy)*k*RS;}
+function noShadow(c){c.shadowColor="transparent";c.shadowBlur=0;c.shadowOffsetX=0;c.shadowOffsetY=0;}
+let GRAIN=null;function grainPattern(){if(GRAIN)return GRAIN;const g=document.createElement("canvas");g.width=g.height=256;const x=g.getContext("2d"),im=x.createImageData(256,256);for(let i=0;i<im.data.length;i+=4){const v=Math.random()*255;im.data[i]=im.data[i+1]=im.data[i+2]=v;im.data[i+3]=255;}x.putImageData(im,0,0);GRAIN=g;return g;}
+function applyGrain(c,x,y,w,h,amt){if(!amt)return;c.save();c.setTransform(1,0,0,1,0,0);c.beginPath();c.rect(x*RS,y*RS,w*RS,h*RS);c.clip();c.globalAlpha=amt;c.globalCompositeOperation="overlay";c.fillStyle=c.createPattern(grainPattern(),"repeat");c.fillRect(x*RS,y*RS,w*RS,h*RS);c.restore();}
+
+function drawNorth(c,x,y,k){
+ const T=TH||THEMES.minimal;c.save();c.translate(x,y);
+ softShadow(c,k,8,2);c.beginPath();c.arc(0,0,26*k,0,7);c.fillStyle=hexA(T.card,.92);c.fill();noShadow(c);
+ c.strokeStyle=T.ink;c.lineWidth=1*k;c.stroke();c.beginPath();c.arc(0,0,21*k,0,7);c.lineWidth=.6*k;c.stroke();
+ c.rotate(P.north*RAD);
+ c.beginPath();c.moveTo(0,-19*k);c.lineTo(7*k,8*k);c.lineTo(0,3*k);c.closePath();c.fillStyle=T.ink;c.fill();
+ c.beginPath();c.moveTo(0,-19*k);c.lineTo(-7*k,8*k);c.lineTo(0,3*k);c.closePath();c.fillStyle=T.card;c.fill();c.lineWidth=1*k;c.stroke();
+ c.fillStyle=T.ink;c.font=`600 ${13*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="bottom";c.fillText("N",0,-29*k);
+ c.restore();
+}
+function drawScaleBar(c,x,y,k){
+ const nice=[1,2,5,10,20,25,50,100,200,250,500,1000,2000,5000];let m=170*k*mpp();m=nice.reduce((a,b)=>Math.abs(b-m)<Math.abs(a-m)?b:a);
+ const px=m2px(m);c.save();
+ softShadow(c,k,8,2);rr(c,x-12*k,y-28*k,px+(P.mpp?62:250)*k,46*k,6*k);c.fillStyle=hexA(TH.card,.9);c.fill();noShadow(c);
+ for(let i=0;i<4;i++){c.fillStyle=i%2?TH.card:TH.ink;c.fillRect(x+i*px/4,y,px/4,5*k);}c.strokeStyle=TH.ink;c.lineWidth=.8*k;c.strokeRect(x,y,px,5*k);
+ c.fillStyle=TH.ink;c.font=`${10.5*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="bottom";c.fillText("0",x,y-3*k);c.fillText(m/2+"",x+px/2,y-3*k);c.fillText(m+" m",x+px,y-3*k);
+ c.textAlign="left";c.font=`600 ${9*k}px ${LATIN}`;c.fillStyle=TH.sub;c.textBaseline="top";c.fillText("SCALE",x,y+8*k);
+ if(!P.mpp){c.fillStyle=TH.accent;c.font=`${10.5*k}px ${SANS}`;c.textBaseline="bottom";c.fillText("比例尺未設定，僅供示意",x+px+22*k,y+6*k);}
+ c.restore();
+}
+/* 一般箭頭（帶淡陰影） */
+function arrow(c,x1,y1,x2,y2,col,w,head){
+ const a=Math.atan2(y2-y1,x2-x1);head=head||w*3.2;
+ c.beginPath();c.moveTo(x1,y1);c.lineTo(x2-Math.cos(a)*head*0.8,y2-Math.sin(a)*head*0.8);c.strokeStyle=col;c.lineWidth=w;c.lineCap="round";c.stroke();
+ c.beginPath();c.moveTo(x2,y2);c.lineTo(x2-head*Math.cos(a-0.42),y2-head*Math.sin(a-0.42));c.lineTo(x2-head*0.72*Math.cos(a),y2-head*0.72*Math.sin(a));c.lineTo(x2-head*Math.cos(a+0.42),y2-head*Math.sin(a+0.42));c.closePath();c.fillStyle=col;c.fill();
+}
+/* 平滑化折線（Chaikin） */
+function smooth(pts,it=3){let p=pts.map(q=>[q[0],q[1]]);for(let n=0;n<it;n++){if(p.length<3)break;const o=[p[0]];for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];o.push([a[0]*.75+b[0]*.25,a[1]*.75+b[1]*.25],[a[0]*.25+b[0]*.75,a[1]*.25+b[1]*.75]);}o.push(p[p.length-1]);p=o;}return p;}
+function quadPts(p0,p1,p2,n=40){const o=[];for(let i=0;i<=n;i++){const t=i/n,u=1-t;o.push([u*u*p0[0]+2*u*t*p1[0]+t*t*p2[0],u*u*p0[1]+2*u*t*p1[1]+t*t*p2[1]]);}return o;}
+/* 流線型漸層箭頭：尾端細且透明，頭部粗且飽和，白色描邊 + 投影 */
+function flowArrow(c,pts,w,col,opt={}){
+ const k=K();if(pts.length<2)return;const L=[0];for(let i=1;i<pts.length;i++)L.push(L[i-1]+Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1]));
+ const tot=L[L.length-1];if(tot<1)return;const head=Math.min(tot*0.4,(opt.head||2.4)*w),Lb=tot-head;
+ const at=s=>{let i=1;while(i<L.length-1&&L[i]<s)i++;const t=(s-L[i-1])/((L[i]-L[i-1])||1);const a=pts[i-1],b=pts[i];return {x:a[0]+(b[0]-a[0])*t,y:a[1]+(b[1]-a[1])*t,a:Math.atan2(b[1]-a[1],b[0]-a[0])};};
+ const N=48,left=[],right=[],tail=opt.tail==null?0.25:opt.tail;
+ for(let i=0;i<=N;i++){const s=Lb*i/N,p=at(Math.max(.01,s)),f=i/N,hw=w/2*(tail+(1-tail)*Math.pow(f,.7));left.push([p.x+Math.sin(p.a)*hw,p.y-Math.cos(p.a)*hw]);right.push([p.x-Math.sin(p.a)*hw,p.y+Math.cos(p.a)*hw]);}
+ const hb=at(Lb),tip=pts[pts.length-1],hw2=w*(opt.headW||1.05);
+ c.save();c.beginPath();c.moveTo(...left[0]);left.forEach(p=>c.lineTo(...p));
+ c.lineTo(hb.x+Math.sin(hb.a)*hw2,hb.y-Math.cos(hb.a)*hw2);c.lineTo(tip[0],tip[1]);c.lineTo(hb.x-Math.sin(hb.a)*hw2,hb.y+Math.cos(hb.a)*hw2);
+ for(let i=right.length-1;i>=0;i--)c.lineTo(...right[i]);c.closePath();
+ const g=c.createLinearGradient(pts[0][0],pts[0][1],tip[0],tip[1]);g.addColorStop(0,hexA(col,opt.a0==null?0.05:opt.a0));g.addColorStop(0.55,hexA(col,(opt.a1||0.85)*0.75));g.addColorStop(1,hexA(col,opt.a1||0.9));
+ if(opt.shadow!==false)softShadow(c,k,opt.glow?18:10,opt.glow?0:4,opt.glow?hexA(col,.7):null);c.fillStyle=g;c.fill();noShadow(c);
+ if(opt.stroke!==false){c.lineWidth=(opt.sw||1.6)*k;c.strokeStyle=TH.dark?hexA(col,.9):"rgba(255,255,255,.95)";c.lineJoin="round";c.stroke();}
+ c.restore();
+}
+function label(c,txt,x,y,k,opt={}){
+ c.save();const sz=(opt.size||13)*k;c.font=`${opt.bold?"600 ":""}${sz}px ${SANS}`;c.textAlign="center";c.textBaseline="middle";
+ const w=c.measureText(txt).width,h=sz*1.75,px=8*k;let bx=opt.align==="left"?x:opt.align==="right"?x-w:x-w/2;
+ const solid=!!opt.bg;softShadow(c,k,solid?8:6,2);rr(c,bx-px,y-h/2,w+px*2,h,h/2);c.fillStyle=opt.bg||hexA(TH.card,.93);c.fill();noShadow(c);
+ if(opt.border){c.strokeStyle=opt.border;c.lineWidth=1.3*k;c.stroke();}
+ c.fillStyle=opt.color||TH.ink;c.fillText(txt,bx+w/2,y+0.5*k);c.restore();
+}
+function pin(c,x,y,col,t,k,r){r=(r||11)*k;c.save();
+ c.beginPath();c.arc(x,y,r*1.75,0,7);c.fillStyle=hexA(col,.16);c.fill();
+ softShadow(c,k,8,2.5);c.beginPath();c.arc(x,y,r,0,7);const g=c.createLinearGradient(x,y-r,x,y+r);g.addColorStop(0,hexA(col,1));g.addColorStop(1,shade(col,-0.25));c.fillStyle=g;c.fill();noShadow(c);
+ c.strokeStyle="#fff";c.lineWidth=2.2*k;c.stroke();c.fillStyle="#fff";c.font=`700 ${r*1.0}px ${SANS}`;c.textAlign="center";c.textBaseline="middle";c.fillText(t,x,y+r*0.06);c.restore();}
+function shade(h,f){if(!h.startsWith("#"))return h;const v=[1,3,5].map(o=>Math.max(0,Math.min(255,Math.round(parseInt(h.slice(o,o+2),16)*(1+f)))));return `rgb(${v[0]},${v[1]},${v[2]})`;}
+function hatch(c,pts,col,gap,k,ang){c.save();polyPath(c,pts);c.clip();const b=bbox(pts);c.strokeStyle=col;c.lineWidth=1.1*k;const d=Math.max(b[2]-b[0],b[3]-b[1])*2;c.beginPath();for(let s=-d;s<d;s+=gap){c.moveTo(b[0]+s,b[1]);c.lineTo(b[0]+s+d*(ang||1),b[1]+d);}c.stroke();c.restore();}
+function drawBase(c,W,H,opts={}){
+ c.fillStyle=TH.paper;c.fillRect(0,0,W,H);
+ c.save();c.globalAlpha=Math.min(1,TH.base.alpha*((opts.alpha||0.42)/0.42));c.filter=TH.base.filter;c.drawImage(IMG,0,0);c.restore();c.filter="none";
+ if(TH.base.tint){c.save();c.globalCompositeOperation="multiply";c.fillStyle=TH.base.tint;c.globalAlpha=.5;c.fillRect(0,0,W,H);c.restore();}
+ if(TH.grid){c.save();c.strokeStyle="rgba(200,225,255,.08)";c.lineWidth=1;const g=m2px(10);for(let x=0;x<W;x+=g){c.beginPath();c.moveTo(x,0);c.lineTo(x,H);c.stroke();}for(let y=0;y<H;y+=g){c.beginPath();c.moveTo(0,y);c.lineTo(W,y);c.stroke();}c.restore();}
+}
+function drawSite(c,k,opt={}){
+ if(P.site.length<3)return;const col=TH.site;
+ c.save();softShadow(c,k,22,0,hexA(col,.55));polyPath(c,P.site);c.fillStyle=opt.fill||hexA(col,TH.dark?.22:.16);c.fill();noShadow(c);c.restore();
+ hatch(c,P.site,hexA(col,.45),9*k,k);
+ polyPath(c,P.site);c.strokeStyle=TH.dark?"rgba(0,0,0,.4)":"rgba(255,255,255,.95)";c.lineWidth=7*k;c.lineJoin="round";c.stroke();
+ c.strokeStyle=col;c.lineWidth=2.6*k;c.setLineDash([14*k,5*k,3*k,5*k]);c.stroke();c.setLineDash([]);
+ if(opt.label!==false){const [x,y]=polyCentroid(P.site);siteTag(c,x,y,k);}
+}
+const siteTag=(c,x,y,k,t)=>label(c,t||"基地 SITE",x,y,k,{bold:true,color:TH.siteText||"#fff",bg:hexA(TH.site,.95),size:13});
+function wrapText(c,txt,maxW){const out=[];String(txt).split("\n").forEach(par=>{let line="";for(const ch of par){if(c.measureText(line+ch).width>maxW&&line){out.push(line);line=ch;}else line+=ch;}out.push(line);});return out;}
+function drawRoadsGrey(c,k){const rs=items("road");
+ rs.forEach(r=>{linePath(c,r.pts);c.strokeStyle=TH.roadEdge;c.lineWidth=Math.max(4*k,m2px(r.width||10))+2.5*k;c.lineCap="butt";c.lineJoin="round";c.stroke();});
+ rs.forEach(r=>{linePath(c,r.pts);c.strokeStyle=TH.road;c.globalAlpha=.85;c.lineWidth=Math.max(4*k,m2px(r.width||10));c.stroke();c.globalAlpha=1;});}
+function drawBldgGrey(c,k,_col,opt={}){const bs=items("bldg");if(!bs.length)return;
+ c.save();bs.forEach(b=>{const h=Math.min(14,(b.floors||3))*0.9*k;polyPath(c,b.pts.map(p=>[p[0]+h*0.7,p[1]+h]));c.fillStyle=TH.bldgShadow;c.fill();});c.restore();
+ bs.forEach(b=>{polyPath(c,b.pts);c.fillStyle=opt.fill||TH.bldg;c.fill();c.strokeStyle=TH.bldgStroke;c.lineWidth=.8*k;c.stroke();});
+ if(TH.sketch)bs.forEach(b=>hatch(c,b.pts,"rgba(120,95,60,.18)",6*k,k,-1));}
+function siteEdges(){const s=P.site,out=[];if(s.length<3)return out;let a2=0;s.forEach((p,i)=>{const q=s[(i+1)%s.length];a2+=p[0]*q[1]-q[0]*p[1];});
+ for(let i=0;i<s.length;i++){const a=s[i],b=s[(i+1)%s.length];let nx=b[1]-a[1],ny=-(b[0]-a[0]);if(a2<0){nx=-nx;ny=-ny;}const L=Math.hypot(nx,ny)||1;out.push({a,b,nx:nx/L,ny:ny/L});}return out;}
+function polylineAt(pts,s){let acc=0;for(let i=0;i<pts.length-1;i++){const L=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);if(acc+L>=s){const t=(s-acc)/L;return {x:pts[i][0]+t*(pts[i+1][0]-pts[i][0]),y:pts[i][1]+t*(pts[i+1][1]-pts[i][1]),a:Math.atan2(pts[i+1][1]-pts[i][1],pts[i+1][0]-pts[i][0])};}acc+=L;}
+ const n=pts.length-1;return {x:pts[n][0],y:pts[n][1],a:Math.atan2(pts[n][1]-pts[n-1][1],pts[n][0]-pts[n-1][0])};}
+const plLen=pts=>{let s=0;for(let i=0;i<pts.length-1;i++)s+=Math.hypot(pts[i+1][0]-pts[i][0],pts[i+1][1]-pts[i][1]);return s;};
+const uniq=a=>[...new Set(a)];
+function hiResLayer(W,H){const L=document.createElement("canvas");L.width=Math.round(W*RS);L.height=Math.round(H*RS);const l=L.getContext("2d");l.scale(RS,RS);return [L,l];}
+
+function drawAttr(c,W,H,k){c.save();c.font=`${9*k}px ${SANS}`;const segs=P.geo.attr.split("｜"),maxW=W*0.6,lines=[];segs.forEach(s=>{if(c.measureText(s).width<=maxW){lines.push(s);return;}let cur="";s.split(/(?<=,) /).forEach(w=>{if(c.measureText(cur+w).width>maxW&&cur){lines.push(cur);cur="";}cur+=(cur?" ":"")+w;});if(cur)lines.push(cur);});
+ const lh=13*k,pad=6*k,tw=Math.max(...lines.map(l=>c.measureText(l).width)),bh=lines.length*lh+6*k,x=W-tw-pad*2-8*k,y=H-bh-8*k;
+ c.fillStyle=TH.dark?"rgba(0,0,0,.6)":"rgba(255,255,255,.82)";rr(c,x,y,tw+pad*2,bh,3*k);c.fill();c.fillStyle=TH.dark?"#dee2e6":"#343a40";c.textAlign="right";c.textBaseline="middle";lines.forEach((l,i)=>c.fillText(l,x+tw+pad,y+3*k+lh*(i+0.5)));c.restore();}
+/* 版面：標題 + 地圖卡片 + 圖例卡片 + 結論框 */
+function frame(d,idx,legend,notes,conclusion,drawFn,opt={}){
+ const W=IMG.width,H=IMG.height,k=K(),T=TH;
+ const M=Math.round(46*k),HH=Math.round(118*k),GAP=Math.round(28*k),LW=Math.round((opt.legendW||400)*k),CH=Math.round(98*k),FH=Math.round(40*k);
+ const tmp=document.createElement("canvas").getContext("2d");tmp.font=`${12.5*k}px ${SANS}`;
+ let need=(opt.extraH||0)*k+(legend.length?78*k+legend.length*31*k:0)+(notes.length?70*k:0);notes.forEach(n=>need+=wrapText(tmp,n,LW-56*k).length*20*k+8*k);
+ const MH=Math.max(H,need),CW=M+W+GAP+LW+M,CHt=M+HH+MH+GAP+CH+FH+M*0.5;
+ const cv=document.createElement("canvas");cv.width=Math.round(CW*RS);cv.height=Math.round(CHt*RS);const c=cv.getContext("2d");c.scale(RS,RS);
+ c.imageSmoothingQuality="high";
+ c.fillStyle=T.paper;c.fillRect(0,0,CW,CHt);
+ // 標題列
+ const tx=M,ty=M;c.textBaseline="alphabetic";
+ c.fillStyle=T.accent;c.font=`300 ${70*k}px ${LATIN}`;c.textAlign="left";const num=String(idx).padStart(2,"0");c.fillText(num,tx-4*k,ty+66*k);
+ const nw=c.measureText(num).width;c.fillStyle=T.line;c.fillRect(tx+nw+16*k,ty+10*k,1.2*k,64*k);
+ const x2=tx+nw+34*k;c.fillStyle=T.ink;c.font=`700 ${32*k}px ${T.titleFont}`;c.fillText(d.t,x2,ty+40*k);
+ c.font=`600 ${12.5*k}px ${LATIN}`;c.fillStyle=T.sub;try{c.letterSpacing=`${3*k}px`;}catch(e){}c.fillText(d.e.toUpperCase(),x2,ty+68*k);try{c.letterSpacing="0px";}catch(e){}
+ c.textAlign="right";c.font=`600 ${13*k}px ${SANS}`;c.fillStyle=T.ink;c.fillText(P.name||"",CW-M,ty+36*k);
+ c.font=`${11*k}px ${LATIN}`;c.fillStyle=T.sub;c.fillText(`SITE ANALYSIS · SHEET ${num} / ${String(FRAME_TOTAL||DIAGS.length).padStart(2,"0")}`,CW-M,ty+58*k);
+ c.fillStyle=T.ink;c.fillRect(M,ty+HH-22*k,CW-2*M,1.2*k);c.fillStyle=T.accent;c.fillRect(M,ty+HH-24.5*k,90*k,4*k);
+ // 地圖卡片
+ const my=M+HH;c.save();softShadow(c,k,26,8,T.dark?"rgba(0,0,0,.6)":"rgba(40,30,20,.2)");c.fillStyle=T.card;c.fillRect(M,my,W,H);noShadow(c);c.restore();
+ c.save();c.translate(M,my);c.beginPath();c.rect(0,0,W,H);c.clip();
+ drawFn(c,W,H,k);
+ if(T.vignette){const g=c.createRadialGradient(W/2,H/2,Math.min(W,H)*0.35,W/2,H/2,Math.hypot(W,H)*0.62);g.addColorStop(0,"rgba(0,0,0,0)");g.addColorStop(1,`rgba(${T.dark?"0,0,0":"60,45,30"},${T.vignette})`);c.fillStyle=g;c.fillRect(0,0,W,H);}
+ drawNorth(c,W-52*k,62*k,k*1.25);drawScaleBar(c,30*k,H-26*k,k);
+ if(P.geo&&P.geo.attr)drawAttr(c,W,H,k);
+ c.restore();applyGrain(c,M,my,W,H,T.grain);
+ c.strokeStyle=T.ink;c.lineWidth=1*k;c.strokeRect(M,my,W,H);
+ const cm=12*k;c.lineWidth=1*k;[[M,my],[M+W,my],[M,my+H],[M+W,my+H]].forEach(([x,y],i)=>{const sx=i%2?1:-1,sy=i>1?1:-1;c.beginPath();c.moveTo(x+sx*4*k,y);c.lineTo(x+sx*(4*k+cm),y);c.moveTo(x,y+sy*4*k);c.lineTo(x,y+sy*(4*k+cm));c.stroke();});
+ // 右側欄
+ const px=M+W+GAP;let py=my;
+ const card=(h)=>{c.save();softShadow(c,k,16,4);rr(c,px,py,LW,h,10*k);c.fillStyle=T.card;c.fill();noShadow(c);c.strokeStyle=T.line;c.lineWidth=.8*k;c.stroke();c.restore();};
+ const head=(t,e,y)=>{c.fillStyle=T.accent;c.fillRect(px+22*k,y-6*k,8*k,8*k);c.fillStyle=T.ink;c.font=`700 ${15*k}px ${SANS}`;c.textAlign="left";c.textBaseline="middle";c.fillText(t,px+38*k,y-2*k);
+  const tw=c.measureText(t).width;c.font=`600 ${10*k}px ${LATIN}`;c.fillStyle=T.sub;c.fillText(e,px+44*k+tw,y-1*k);c.fillStyle=T.line;c.fillRect(px+22*k,y+12*k,LW-44*k,1*k);};
+ if(opt.legendDraw){py=opt.legendDraw(c,px,py,LW,k);}
+ if(legend.length){const h=64*k+legend.length*31*k;card(h);head("圖例","LEGEND",py+30*k);let ly=py+66*k;
+  legend.forEach(L=>{legendSym(c,L,px+24*k,ly,k);c.fillStyle=T.ink;c.font=`${12.5*k}px ${SANS}`;c.textAlign="left";c.textBaseline="middle";const t=wrapText(c,L.l,LW-100*k);c.fillText(t[0]+(t.length>1?"…":""),px+72*k,ly);ly+=31*k;});py+=h+18*k;}
+ if(notes.length){c.font=`${12.5*k}px ${SANS}`;const lines=notes.map(n=>wrapText(c,n,LW-56*k));const h=60*k+lines.reduce((a,l)=>a+l.length*20*k+8*k,0);card(h);head("說明","NOTES",py+30*k);let ny=py+62*k;
+  lines.forEach(ls=>{c.fillStyle=T.accent;c.beginPath();c.arc(px+26*k,ny,2.2*k,0,7);c.fill();ls.forEach(t=>{c.fillStyle=T.sub;c.font=`${12.5*k}px ${SANS}`;c.textAlign="left";c.textBaseline="middle";c.fillText(t,px+36*k,ny);ny+=20*k;});ny+=8*k;});}
+ // 結論框
+ const cy=my+MH+GAP,cw=CW-2*M;c.save();softShadow(c,k,16,4);rr(c,M,cy,cw,CH,10*k);c.fillStyle=T.card;c.fill();noShadow(c);c.restore();
+ c.fillStyle=T.accent;rr(c,M,cy,8*k,CH,4*k);c.fill();c.fillRect(M+4*k,cy,4*k,CH);
+ c.fillStyle=T.accent;c.font=`700 ${10.5*k}px ${LATIN}`;c.textAlign="left";c.textBaseline="middle";try{c.letterSpacing=`${2*k}px`;}catch(e){}c.fillText("KEY FINDING",M+30*k,cy+24*k);try{c.letterSpacing="0px";}catch(e){}
+ c.font=`700 ${17*k}px ${T.titleFont}`;c.fillStyle=T.ink;const cl=wrapText(c,conclusion,cw-60*k).slice(0,2);cl.forEach((t,i)=>c.fillText(t,M+30*k,cy+52*k+i*26*k));
+ // 頁尾
+ c.font=`${10.5*k}px ${LATIN}`;c.fillStyle=T.sub;c.textAlign="left";c.fillText(`${P.lat}°N  ${P.lon}°E  ·  UTC+${P.tz}  ·  NORTH ${P.north}°`,M,cy+CH+FH*0.7);
+ c.textAlign="right";c.fillText("基地分析圖產生器 SITE ANALYSIS GENERATOR",CW-M,cy+CH+FH*0.7);
+ applyGrain(c,0,0,CW,CHt,T.grain*0.5);
+ return cv;
+}
+function legendSym(c,L,x,y,k){
+ c.save();const w=34*k;
+ switch(L.s){
+  case"line":c.beginPath();c.moveTo(x,y);c.lineTo(x+w,y);c.strokeStyle=L.c;c.lineWidth=Math.min(10,(L.w||4))*k;c.lineCap="round";c.setLineDash(L.dash?L.dash.map(v=>v*k):[]);c.stroke();break;
+  case"arrow":flowArrow(c,[[x,y],[x+w+4*k,y]],Math.max(8,(L.w||3)*2.4)*k,L.c,{shadow:false,head:1.4,sw:1});break;
+  case"fill":rr(c,x,y-9*k,w,18*k,4*k);c.fillStyle=L.c;c.fill();if(L.b){c.strokeStyle=L.b;c.lineWidth=1.6*k;c.setLineDash(L.dash?L.dash.map(v=>v*k):[]);c.stroke();}else{c.strokeStyle=TH.line;c.lineWidth=.8*k;c.stroke();}break;
+  case"dot":pin(c,x+w/2,y,L.c,L.t||"",k,9.5);break;
+  case"ring":c.beginPath();c.arc(x+w/2,y,10*k,0,7);c.strokeStyle=L.c;c.lineWidth=1.8*k;c.setLineDash([4*k,3*k]);c.stroke();break;
+  case"sun":{const g=c.createRadialGradient(x+w/2,y,0,x+w/2,y,13*k);g.addColorStop(0,"#fff3bf");g.addColorStop(.45,"#fab005");g.addColorStop(1,"rgba(250,176,5,0)");c.fillStyle=g;c.beginPath();c.arc(x+w/2,y,13*k,0,7);c.fill();break;}
+  case"grad":{const g=c.createLinearGradient(x,0,x+w,0);L.stops.forEach((s,i)=>g.addColorStop(i/(L.stops.length-1),s));rr(c,x,y-7*k,w,14*k,7*k);c.fillStyle=g;c.fill();break;}
+ }
+ c.restore();
+}
+/* ======================== 各分析圖 ======================== */
+const G={};
+G.base=(d,i)=>{
+ const area=P.site.length>2?polyArea(P.site)*mpp()*mpp():0;
+ const legend=[{s:"fill",c:"rgba(192,57,43,.22)",b:"#c0392b",dash:[6,3],l:"基地範圍"}];
+ const notes=[`基地面積約 ${area?Math.round(area).toLocaleString()+" m²（約 "+(area/3.30579).toFixed(0)+" 坪）":"—（尚未畫基地範圍）"}`,`比例：${P.mpp?(+P.mpp).toFixed(3)+" m/px":"未設定"}；北向偏角 ${P.north}°`,`位置：${P.lat}°N, ${P.lon}°E（UTC+${P.tz}）`,"後續各圖使用相同底圖、比例尺與北向，方便對照。"];
+ if(P.geo){const g=P.geo,cn=g.counts;notes.push(`由座標 ${g.lat}, ${g.lon} 自動產生（半徑 ${g.radius} m，Web Mercator z${g.zoom}，比例已含緯度修正）。圖資版權見圖面右下角`+(cn?`。OSM 匯入：建築 ${cn.bldg}、道路 ${cn.road}、設施 ${cn.fac}${g.osmTime?"（資料時間 "+g.osmTime.slice(0,10)+"）":""}`:""));}
+ return frame(d,i,legend,notes,area?`基地面積約 ${Math.round(area).toLocaleString()} m²，以下分析皆以此範圍為對象。`:"請先畫出基地範圍。",(c,W,H,k)=>{drawBase(c,W,H,{alpha:.8});drawRoadsGrey(c,k);drawBldgGrey(c,k);drawSite(c,k);});
+};
+
+G.sun=(d,i)=>{
+ const pr=P.params,[Y,M,D]=(pr.pDate||"2026-12-22").split("-").map(Number),[hh,mi]=(pr.pTime||"10:00").split(":").map(Number);
+ const tmin=hh*60+mi,lat=P.lat,lon=P.lon,tz=P.tz;
+ const sp=solarPosition(Y,M,D,tmin,lat,lon,tz),ev=sunEvents(Y,M,D,lat,lon,tz);
+ const floorH=+pr.pFloorH||3.3,mass=+pr.pMass||0;
+ const days=[{n:"夏至 6/21",m:6,d:21,c:"#e8590c"},{n:"春秋分 3/20",m:3,d:20,c:"#f2a900"},{n:"冬至 12/21",m:12,d:21,c:"#1c7ed6"}];
+ const times=pr.pMulti?[9*60,12*60,15*60]:[];
+ const legend=[...days.map(x=>({s:"line",c:x.c,w:3,l:x.n+" 太陽軌跡"})),{s:"grad",stops:["#ffd43b","#f76707","#c2255c"],l:`分析日 ${pr.pDate} 軌跡（白點＝整點）`},{s:"sun",l:`${pr.pTime} 太陽位置`},
+  {s:"fill",c:"rgba(59,61,92,.5)",l:`${pr.pTime} 陰影`}];
+ if(times.length)legend.push({s:"fill",c:"rgba(59,61,92,.16)",l:"09:00／12:00／15:00 陰影疊合"});
+ legend.push({s:"fill",c:"rgba(192,57,43,.22)",b:"#c0392b",dash:[6,3],l:"基地"+(mass?`（假設量體高 ${mass} m）`:"")});
+ const ratio=sp.alt>0?1/Math.tan(sp.alt*RAD):null;
+ const notes=[`分析時間：${pr.pDate} ${pr.pTime}（UTC+${tz}）`,`太陽高度角 ${sp.alt.toFixed(1)}°、方位角 ${sp.az.toFixed(1)}°（${dirName(sp.az)}方，由正北順時針量）`,
+  `日出 ${fmtMin(ev.rise)}／日落 ${fmtMin(ev.set)}；正午最高 ${ev.maxAlt.toFixed(1)}°（約 ${fmtMin(ev.noon)}）`,
+  ratio?`陰影長度＝建物高度 × ${ratio.toFixed(2)}，投向${dirName((sp.az+180)%360)}方`:"此時太陽在地平線下，無直射陰影",
+  `計算：NOAA 太陽位置演算法（Meeus 天文公式），依 ${lat}°N、${lon}°E 即時計算，非示意數據。軌跡採等距極座標投影：外圈＝地平線，虛線圈＝高度角 30°、60°。建物高度＝樓層 × ${floorH} m${items("bldg").some(b=>b.h)?"（OSM 有 height 標籤者用實際高度）":""}。`];
+ if(P.geo){const en=items("bldg").filter(b=>b.est).length;if(en)notes.push(`周邊 ${en} 棟建築在 OSM 缺樓層資料，樓層為估計值（預設 ${$("gDefF").value} 層），陰影僅供參考；可用「✎ 編輯屬性」修正。`);}
+ const wn=solarPosition(Y,12,21,12*60,lat,lon,tz),sw=solarPosition(Y,6,21,16*60,lat,lon,tz);
+ const concl=`冬至正午太陽高度僅約 ${wn.alt.toFixed(0)}°、位於${dirName(wn.az)}方，主要採光面與戶外活動空間宜朝${dirName(wn.az)}；夏季午後太陽偏${dirName(sw.az)}，西向立面需加強遮陽。`;
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H);drawRoadsGrey(c,k);
+  const blds=items("bldg").map(b=>({pts:b.pts,h:b.h||(b.floors||3)*floorH}));
+  if(mass>0&&P.site.length>2)blds.push({pts:P.site,h:mass});
+  const shCol=TH.dark?"#000000":"#3b3d5c";
+  const shadowLayer=(t,alpha,blur)=>{const s=solarPosition(Y,M,D,t,lat,lon,tz);if(s.alt<=1)return;
+   const [L,l]=hiResLayer(W,H);l.fillStyle=shCol;
+   const [vx,vy]=bearingVec((s.az+180)%360),f=1/Math.tan(s.alt*RAD);
+   blds.forEach(b=>{const off=m2px(b.h*f),dx=vx*off,dy=vy*off,pts=b.pts;
+    polyPath(l,pts);l.fill();polyPath(l,pts.map(p=>[p[0]+dx,p[1]+dy]));l.fill();
+    for(let j=0;j<pts.length;j++){const a=pts[j],bb=pts[(j+1)%pts.length];l.beginPath();l.moveTo(a[0],a[1]);l.lineTo(bb[0],bb[1]);l.lineTo(bb[0]+dx,bb[1]+dy);l.lineTo(a[0]+dx,a[1]+dy);l.closePath();l.fill();}});
+   c.save();c.globalAlpha=alpha;c.globalCompositeOperation=TH.dark?"source-over":"multiply";c.filter=`blur(${blur*k*RS}px)`;c.drawImage(L,0,0,W,H);c.restore();c.filter="none";};
+  times.forEach(t=>shadowLayer(t,0.13,3));shadowLayer(tmin,0.5,1.2);
+  drawBldgGrey(c,k);drawSite(c,k,{label:false});
+  const [cx,cy]=polyCentroid(P.site),R=Math.min(W,H)*0.41;
+  const proj=(alt,az)=>{const r=R*(1-alt/90),[vx,vy]=bearingVec(az);return [cx+vx*r,cy+vy*r];};
+  // 天空圓盤
+  c.save();const dg=c.createRadialGradient(cx,cy,0,cx,cy,R);dg.addColorStop(0,"rgba(255,236,170,.30)");dg.addColorStop(.7,"rgba(255,214,120,.12)");dg.addColorStop(1,"rgba(255,190,80,.02)");
+  c.beginPath();c.arc(cx,cy,R,0,7);c.fillStyle=dg;c.fill();
+  c.strokeStyle=hexA(TH.ink,.75);c.lineWidth=1.4*k;c.stroke();c.beginPath();c.arc(cx,cy,R+7*k,0,7);c.lineWidth=.6*k;c.stroke();
+  [30,60].forEach(a=>{c.beginPath();c.arc(cx,cy,R*(1-a/90),0,7);c.setLineDash([2*k,5*k]);c.strokeStyle=hexA(TH.ink,.45);c.lineWidth=1*k;c.stroke();});c.setLineDash([]);
+  for(let a=0;a<360;a+=5){const big=a%30===0,[x1,y1]=proj(0,a),[x2,y2]=proj(big?-4.5:-2,a);c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=hexA(TH.ink,big?.8:.4);c.lineWidth=(big?1.4:.7)*k;c.stroke();
+   if(big&&a%90){const [tx,ty]=proj(-9,a);c.fillStyle=TH.sub;c.font=`${10*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="middle";c.fillText(a+"°",tx,ty);}}
+  for(let a=0;a<360;a+=90){const [x1,y1]=proj(0,a),[x2,y2]=proj(90,a);c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.setLineDash([1.5*k,4*k]);c.strokeStyle=hexA(TH.ink,.3);c.lineWidth=.8*k;c.stroke();}c.setLineDash([]);
+  [["N",0],["E",90],["S",180],["W",270]].forEach(([t,a])=>{const [x,y]=proj(-13,a);label(c,t+" "+({N:"北",E:"東",S:"南",W:"西"})[t],x,y,k,{bold:true,size:12,bg:TH.ink,color:TH.paper});});
+  [30,60].forEach(a=>{const [x,y]=proj(a,202);c.fillStyle=TH.sub;c.font=`600 ${10*k}px ${LATIN}`;c.textAlign="center";c.fillText(a+"°",x,y);});
+  c.restore();
+  const pathOf=(m,dd)=>{const pts=[];for(let t=240;t<=1200;t+=3){const s=solarPosition(Y,m,dd,t,lat,lon,tz);if(s.alt>0)pts.push({t,p:proj(s.alt,s.az),az:s.az});}return pts;};
+  const drawPath=(ps,col,w,glow)=>{c.save();c.lineCap="round";c.lineJoin="round";c.beginPath();ps.forEach((q,j)=>j?c.lineTo(...q.p):c.moveTo(...q.p));
+   c.strokeStyle=TH.dark?"rgba(0,0,0,.5)":"rgba(255,255,255,.9)";c.lineWidth=w+3.5*k;c.stroke();
+   if(glow){c.shadowColor=hexA(typeof col==="string"?col:"#f08c00",.8);c.shadowBlur=12*k*RS;}c.strokeStyle=col;c.lineWidth=w;c.stroke();c.restore();};
+  days.forEach(x=>{const ps=pathOf(x.m,x.d);if(ps.length<2)return;
+   [ps[0],ps[ps.length-1]].forEach(q=>{c.beginPath();c.moveTo(cx,cy);c.lineTo(...q.p);c.setLineDash([2*k,4*k]);c.strokeStyle=hexA(x.c,.8);c.lineWidth=1.1*k;c.stroke();c.setLineDash([]);});
+   drawPath(ps,x.c,2.6*k,false);const mid=ps[Math.floor(ps.length*0.16)];label(c,x.n,mid.p[0],mid.p[1]-15*k,k,{size:10.5,color:x.c,bold:true});});
+  const sel=pathOf(M,D);
+  if(sel.length>1){const a=sel[0].p,b=sel[sel.length-1].p,g=c.createLinearGradient(a[0],a[1],b[0],b[1]);g.addColorStop(0,"#ffd43b");g.addColorStop(.5,"#f76707");g.addColorStop(1,"#c2255c");
+   drawPath(sel,g,6*k,true);
+   sel.filter(q=>q.t%60===0).forEach(q=>{c.save();softShadow(c,k,5,1.5);c.beginPath();c.arc(q.p[0],q.p[1],5*k,0,7);c.fillStyle="#fff";c.fill();noShadow(c);c.strokeStyle="#e8590c";c.lineWidth=2*k;c.stroke();c.restore();
+    const dx=q.p[0]-cx,dy=q.p[1]-cy,L=Math.hypot(dx,dy)||1;c.fillStyle=TH.ink;c.font=`600 ${10.5*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="middle";
+    c.save();c.strokeStyle=TH.dark?"rgba(0,0,0,.7)":"rgba(255,255,255,.9)";c.lineWidth=3*k;c.strokeText(String(q.t/60).padStart(2,"0")+":00",q.p[0]+dx/L*20*k,q.p[1]+dy/L*20*k);c.restore();
+    c.fillText(String(q.t/60).padStart(2,"0")+":00",q.p[0]+dx/L*20*k,q.p[1]+dy/L*20*k);});}
+  if(sp.alt>0){const [sx,sy]=proj(sp.alt,sp.az);
+   const rg=c.createLinearGradient(sx,sy,cx,cy);rg.addColorStop(0,"rgba(250,176,5,.95)");rg.addColorStop(1,"rgba(250,176,5,.1)");
+   c.beginPath();c.moveTo(sx,sy);c.lineTo(cx,cy);c.strokeStyle=rg;c.lineWidth=3*k;c.setLineDash([10*k,5*k]);c.stroke();c.setLineDash([]);
+   const [vx,vy]=bearingVec((sp.az+180)%360);flowArrow(c,[[cx,cy],[cx+vx*R*0.33,cy+vy*R*0.33]],16*k,TH.dark?"#adb5bd":"#3b3d5c",{tail:.5});
+   const gg=c.createRadialGradient(sx,sy,0,sx,sy,46*k);gg.addColorStop(0,"rgba(255,249,219,1)");gg.addColorStop(.25,"rgba(255,212,59,.95)");gg.addColorStop(.5,"rgba(250,176,5,.35)");gg.addColorStop(1,"rgba(250,176,5,0)");
+   c.fillStyle=gg;c.beginPath();c.arc(sx,sy,46*k,0,7);c.fill();
+   for(let r=0;r<16;r++){const a=r*Math.PI/8;c.beginPath();c.moveTo(sx+Math.cos(a)*17*k,sy+Math.sin(a)*17*k);c.lineTo(sx+Math.cos(a)*(r%2?22:27)*k,sy+Math.sin(a)*(r%2?22:27)*k);c.strokeStyle="#f59f00";c.lineWidth=2*k;c.lineCap="round";c.stroke();}
+   c.beginPath();c.arc(sx,sy,12*k,0,7);c.fillStyle="#ffd43b";c.fill();c.strokeStyle="#fff";c.lineWidth=2*k;c.stroke();
+   label(c,`${pr.pTime}　高度角 ${sp.alt.toFixed(1)}°　方位角 ${sp.az.toFixed(1)}°`,sx,sy+(sy>cy?40:-40)*k,k,{size:12,bold:true,border:"#f59f00"});}
+  siteTag(c,cx,cy,k);
+
+ });
+};
+
+G.wind=(d,i)=>{
+ const pr=P.params,wi=+pr.pWinW||0,si=+pr.pWinS||0,azW=wi*22.5,azS=si*22.5;
+ const pk=pr.pWindPreset||"custom",preset=WIND_PRESETS[pk];
+ const parseRose=s=>{const v=(s||"").split(/[,，\s]+/).filter(x=>x!=="").map(Number);return v.length===16&&v.every(x=>!isNaN(x))?v:null;};
+ const roseW=parseRose(pr.pRoseW),roseS=parseRose(pr.pRoseS);
+ const edges=siteEdges(),facing=az=>{const [vx,vy]=bearingVec(az);return edges.filter(e=>e.nx*vx+e.ny*vy>0.3);};
+ const wE=facing(azW),sE=facing(azS);
+ const legend=[{s:"arrow",c:"#1c7ed6",w:4,l:`冬季風：${DIRS_ZH[wi]}風${pr.pWinWv?"，約 "+pr.pWinWv+" m/s":""}`},{s:"arrow",c:"#f76707",w:4,l:`夏季風：${DIRS_ZH[si]}風${pr.pWinSv?"，約 "+pr.pWinSv+" m/s":""}`},
+  {s:"line",c:"#1c7ed6",w:6,l:"冬季迎風面（需防風）"},{s:"line",c:"#f76707",w:6,l:"夏季迎風面（可引風）"},{s:"line",c:"#1c7ed6",w:1.6,l:"冬季流線（繞流示意）"},{s:"line",c:"#f76707",w:1.6,l:"夏季流線（繞流示意）"},{s:"fill",c:"rgba(120,120,120,.25)",l:"冬季背風區（風影）"}];
+ const notes=["風向資料來源："+preset.src,(roseW||roseS)?"左上角風花圖依輸入的 16 方位頻率繪製。":"未輸入 16 方位頻率：左上角僅標示盛行風向。可貼入 CODiS 測站統計產生風花圖。","箭頭為示意風場，未模擬建物繞流與峽谷效應（非 CFD）。"];
+ const concl=`冬季${DIRS_ZH[wi]}風迎向基地${wE.length?dirName(bearingOf(wE[0].nx,wE[0].ny)):DIRS_ZH[wi]}側，宜以防風植栽、實牆或服務空間阻擋；夏季${DIRS_ZH[si]}風可由${sE.length?dirName(bearingOf(sE[0].nx,sE[0].ny)):DIRS_ZH[si]}側引入，對側留出風口形成穿堂風。`;
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H);drawRoadsGrey(c,k);drawBldgGrey(c,k);
+  const [cx,cy]=polyCentroid(P.site);const bb=P.site.length>2?bbox(P.site):[cx-60,cy-60,cx+60,cy+60],Rs=Math.max(40*k,Math.hypot(bb[2]-bb[0],bb[3]-bb[1])/2);
+  // 背風區
+  [[azW,"#1c7ed6"]].forEach(([az,col])=>{const [vx,vy]=bearingVec((az+180)%360);if(P.site.length<3)return;const off=m2px(45);
+   const g=c.createLinearGradient(cx,cy,cx+vx*(Rs+off),cy+vy*(Rs+off));g.addColorStop(0,hexA(TH.dark?"#ffffff":"#5c6b7a",.22));g.addColorStop(1,"rgba(0,0,0,0)");c.fillStyle=g;
+   P.site.forEach((p,j)=>{const q=P.site[(j+1)%P.site.length];c.beginPath();c.moveTo(...p);c.lineTo(...q);c.lineTo(q[0]+vx*off,q[1]+vy*off);c.lineTo(p[0]+vx*off,p[1]+vy*off);c.closePath();c.fill();});});
+  drawSite(c,k,{label:false});
+  // 流線（繞過基地）
+  const stream=(az,col,phase)=>{const [ux,uy]=bearingVec((az+180)%360),nx=-uy,ny=ux,span=Math.hypot(W,H)/2+40,sp=62*k;
+   for(let p=-span+phase*sp/2;p<span;p+=sp){const pts=[];for(let s=-span;s<=span;s+=8*k){const dp=Math.sign(p||1)*Rs*1.15*Math.exp(-(s*s)/(2*(1.6*Rs)**2))*Math.exp(-(p*p)/(2*(1.3*Rs)**2));
+     pts.push([cx+ux*s+nx*(p+dp),cy+uy*s+ny*(p+dp)]);}
+    const a=pts[0],b=pts[pts.length-1],g=c.createLinearGradient(a[0],a[1],b[0],b[1]);g.addColorStop(0,hexA(col,0));g.addColorStop(.35,hexA(col,.55));g.addColorStop(.65,hexA(col,.55));g.addColorStop(1,hexA(col,0));
+    c.beginPath();pts.forEach((q,j)=>j?c.lineTo(...q):c.moveTo(...q));c.strokeStyle=g;c.lineWidth=1.8*k;c.stroke();
+    for(let j=12+((p/sp|0)%3)*6;j<pts.length-4;j+=34){const q=pts[j],r=pts[j+2],an=Math.atan2(r[1]-q[1],r[0]-q[0]);if(q[0]<0||q[1]<0||q[0]>W||q[1]>H)continue;
+     c.beginPath();c.moveTo(r[0]-Math.cos(an-0.5)*9*k,r[1]-Math.sin(an-0.5)*9*k);c.lineTo(r[0],r[1]);c.lineTo(r[0]-Math.cos(an+0.5)*9*k,r[1]-Math.sin(an+0.5)*9*k);c.strokeStyle=hexA(col,.8);c.lineWidth=1.8*k;c.lineCap="round";c.lineJoin="round";c.stroke();}}};
+  stream(azW,"#1c7ed6",0);stream(azS,"#f76707",1);
+  const edgeGlow=(e,off,col)=>{c.save();c.shadowColor=hexA(col,.9);c.shadowBlur=14*k*RS;c.beginPath();c.moveTo(e.a[0]+e.nx*off*k,e.a[1]+e.ny*off*k);c.lineTo(e.b[0]+e.nx*off*k,e.b[1]+e.ny*off*k);c.strokeStyle=col;c.lineWidth=7*k;c.lineCap="round";c.stroke();c.restore();};
+  wE.forEach(e=>edgeGlow(e,10,"#1c7ed6"));sE.forEach(e=>edgeGlow(e,24,"#f76707"));
+  // 大型季風弧形箭頭
+  const R=Math.min(W,H)*0.44;
+  [[azW,"#1c7ed6","冬季 "+DIRS_ZH[wi]+"季風",1],[azS,"#f76707","夏季 "+DIRS_ZH[si]+"風",-1]].forEach(([az,col,t,bend])=>{const [vx,vy]=bearingVec(az),nx=-vy,ny=vx;
+   const p0=[cx+vx*R*1.05,cy+vy*R*1.05],p2=[cx+vx*(Rs+28*k),cy+vy*(Rs+28*k)],p1=[(p0[0]+p2[0])/2+nx*R*0.22*bend,(p0[1]+p2[1])/2+ny*R*0.22*bend];
+   flowArrow(c,quadPts(p0,p1,p2),48*k,col,{a0:.0,a1:.88,glow:true,tail:.2,head:1.5,headW:.95});
+   label(c,t,p0[0],p0[1],k,{bold:true,color:"#fff",bg:hexA(col,.95),size:14});});
+  // 風花圖卡片
+  const rx=140*k,ry=150*k,rr2=92*k;c.save();softShadow(c,k,16,4);rr(c,rx-rr2-34*k,ry-rr2-34*k,(rr2+34*k)*2,(rr2+34*k)*2+30*k,12*k);c.fillStyle=hexA(TH.card,.94);c.fill();noShadow(c);c.restore();
+  [0.33,0.66,1].forEach(f=>{c.beginPath();c.arc(rx,ry,rr2*f,0,7);c.strokeStyle=hexA(TH.ink,.18);c.lineWidth=.8*k;c.stroke();});
+  for(let j=0;j<16;j++){const [vx,vy]=bearingVec(j*22.5);c.beginPath();c.moveTo(rx,ry);c.lineTo(rx+vx*rr2,ry+vy*rr2);c.strokeStyle=hexA(TH.ink,.12);c.stroke();}
+  const mx=Math.max(...(roseW||[0]),...(roseS||[0]))||1;
+  const petals=(arr,col,sh)=>arr.forEach((v,j)=>{const r=rr2*v/mx,a0=j*22.5-11.25+sh,a1=j*22.5+11.25-sh;c.beginPath();c.moveTo(rx,ry);for(let a=a0;a<=a1+0.01;a+=2){const [vx,vy]=bearingVec(a);c.lineTo(rx+vx*r,ry+vy*r);}c.closePath();
+   const g=c.createRadialGradient(rx,ry,0,rx,ry,rr2);g.addColorStop(0,hexA(col,.35));g.addColorStop(1,hexA(col,.9));c.fillStyle=g;c.fill();c.strokeStyle="rgba(255,255,255,.8)";c.lineWidth=.8*k;c.stroke();});
+  if(roseW)petals(roseW,"#1c7ed6",1.5);if(roseS)petals(roseS,"#f76707",4.5);
+  if(!roseW&&!roseS)[[azW,"#1c7ed6"],[azS,"#f76707"]].forEach(([az,col])=>{const [vx,vy]=bearingVec(az);flowArrow(c,[[rx+vx*rr2,ry+vy*rr2],[rx+vx*10*k,ry+vy*10*k]],20*k,col,{shadow:false});});
+  [["N",0],["E",90],["S",180],["W",270]].forEach(([t,a])=>{const [vx,vy]=bearingVec(a);c.fillStyle=TH.ink;c.font=`700 ${11*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="middle";c.fillText(t,rx+vx*(rr2+15*k),ry+vy*(rr2+15*k));});
+  c.fillStyle=TH.sub;c.font=`600 ${10.5*k}px ${SANS}`;c.textAlign="center";c.fillText((roseW||roseS)?"風花圖 WIND ROSE":"盛行風向 PREVAILING WIND",rx,ry+rr2+38*k);
+  siteTag(c,cx,cy,k);
+
+ });
+};
+
+G.circ=(d,i)=>{
+ const roads=items("road");
+ const legend=[...Object.entries(ROAD).filter(([kk])=>roads.some(r=>r.cls===kk)).map(([kk,v])=>({s:"line",c:v.c,w:v.w*0.8,l:v.n+"（車行，白箭頭＝方向）"})),
+  {s:"line",c:"#1c7ed6",w:4,dash:[6,4],l:"人行動線"},{s:"dot",c:"#b8322a",t:"車",l:"車行出入口"},{s:"dot",c:"#1c7ed6",t:"人",l:"人行出入口"},
+  {s:"dot",c:FAC.mrt.c,t:"捷",l:"捷運／軌道站"},{s:"dot",c:FAC.bus.c,t:"公",l:"公車站"},{s:"fill",c:"rgba(192,57,43,.22)",b:"#c0392b",dash:[6,3],l:"基地"}];
+ const notes=[];
+ const [sx0,sy0]=polyCentroid(P.site),rd=roads.map(r=>({r,m:distPolyline(sx0,sy0,r.pts)*mpp()})).sort((a,b)=>a.m-b.m),seenR=new Set(),rl=[];
+ rd.forEach(x=>{const key=x.r.name||("#"+rl.length);if(roads.length>8&&!x.r.name)return;if(seenR.has(key))return;seenR.add(key);rl.push(x);});
+ const showR=roads.length>8?[...rl.filter(x=>x.r.cls!=="lane").slice(0,4),...rl.filter(x=>x.r.cls==="lane").slice(0,3)].sort((a,b)=>a.m-b.m):rl.slice(0,8),labelR=new Set(showR.map(x=>x.r));
+ showR.forEach(({r,m})=>notes.push(`${r.name||ROAD[r.cls].n}：${ROAD[r.cls].n}${r.width?"，路寬約 "+r.width+" m":""}${r.oneway?"，單行":""}${roads.length>8?"，距基地中心約 "+Math.round(m)+" m":""}`));
+ if(roads.length>showR.length)notes.push(`共 ${roads.length} 段道路，上列為距基地最近的主要／次要道路與巷道（${showR.length} 條）。`);
+ const trN=items("fac").filter(f=>f.cat==="mrt"||f.cat==="bus").map(f=>({f,m:distToSite(...f.pts[0])})).sort((a,b)=>a.m-b.m).slice(0,6).map(x=>x.f);
+ trN.forEach(f=>{const dm=distToSite(...f.pts[0])*mpp();notes.push(`${FAC[f.cat].n}${f.name?"「"+f.name+"」":""}：距基地約 ${Math.round(dm)} m（步行約 ${Math.max(1,Math.round(dm/80))} 分）`);});
+ if(!roads.length)notes.push("尚未標記道路。");
+ let side="";const main=roads.filter(r=>r.cls==="main");
+ if(main.length&&P.site.length>2){const [cx,cy]=polyCentroid(P.site);let np=null,nd=1e12;main.forEach(r=>{for(let j=0;j<r.pts.length-1;j++){const a=r.pts[j],b=r.pts[j+1];for(let t=0;t<=1;t+=0.01){const x=a[0]+t*(b[0]-a[0]),y=a[1]+t*(b[1]-a[1]),dd=Math.hypot(x-cx,y-cy);if(dd<nd){nd=dd;np=[x,y,r];}}}});
+  {const dm=nd*mpp(),near=dm<Math.sqrt(polyArea(P.site))*mpp()/2+40;side=near?`基地${dirName(bearingOf(np[0]-cx,np[1]-cy))}側臨${np[2].name||"主要幹道"}`:`最近的主要幹道為${np[2].name||"主要幹道"}（位於基地${dirName(bearingOf(np[0]-cx,np[1]-cy))}側約 ${Math.round(dm)} m），基地本身主要臨次要道路或巷道`;}}
+ const concl=(side?side+"，人行主入口宜面向主要人流與大眾運輸方向；":"")+"車行出入口宜設於次要道路或巷道側，避免與人行動線交織。";
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H);drawBldgGrey(c,k);
+  const [cx,cy]=polyCentroid(P.site);
+  roads.forEach(r=>{const st=ROAD[r.cls],w=st.w*1.5*k;c.save();c.lineCap="round";c.lineJoin="round";
+   linePath(c,r.pts);c.strokeStyle=hexA(st.c,.18);c.lineWidth=w*3.2;c.stroke();
+   c.shadowColor=hexA(st.c,.6);c.shadowBlur=10*k*RS;linePath(c,r.pts);c.strokeStyle=st.c;c.lineWidth=w;c.stroke();c.restore();
+   if(r.cls==="main"){linePath(c,r.pts);c.strokeStyle="rgba(255,255,255,.7)";c.lineWidth=1.2*k;c.setLineDash([12*k,10*k]);c.stroke();c.setLineDash([]);}
+   const L=plLen(r.pts),step=170*k;for(let s=step/2;s<L;s+=step){const p=polylineAt(r.pts,s),ca=Math.cos(p.a),sa=Math.sin(p.a);
+    const chev=(dir,o)=>{const ox=-sa*o,oy=ca*o,x=p.x+ox,y=p.y+oy,h=w*0.42;c.beginPath();c.moveTo(x-ca*h*dir-sa*h,y-sa*h*dir+ca*h);c.lineTo(x+ca*h*dir*0.6,y+sa*h*dir*0.6);c.lineTo(x-ca*h*dir+sa*h,y-sa*h*dir-ca*h);c.strokeStyle="#fff";c.lineWidth=1.8*k;c.lineCap="round";c.lineJoin="round";c.stroke();};
+    if(r.oneway)chev(1,0);else{chev(1,w*0.26);chev(-1,-w*0.26);}}
+   if(r.name&&labelR.has(r)){const p=polylineAt(r.pts,L*0.12);c.save();c.translate(p.x,p.y);let a=p.a;if(a>Math.PI/2||a<-Math.PI/2)a+=Math.PI;c.rotate(a);label(c,r.name+(r.width?`  ${r.width}m`:""),0,-w-14*k,k,{bold:true,size:12,color:"#fff",bg:hexA(st.c,.92)});c.restore();}});
+  drawSite(c,k,{label:false});
+  items("ped").forEach(p=>{const sp=smooth(p.pts,4);c.save();c.lineCap="round";c.lineJoin="round";
+   linePath(c,sp);c.strokeStyle=hexA("#1c7ed6",.18);c.lineWidth=16*k;c.stroke();
+   linePath(c,sp);c.strokeStyle=TH.dark?"rgba(0,0,0,.6)":"#fff";c.lineWidth=7*k;c.stroke();
+   linePath(c,sp);c.strokeStyle="#1c7ed6";c.lineWidth=4*k;c.setLineDash([1*k,8*k]);c.lineWidth=5*k;c.stroke();c.setLineDash([]);c.restore();
+   const L=plLen(sp);if(p.src!=="osm")flowArrow(c,sp.slice(Math.max(0,sp.length-8)),14*k,"#1c7ed6",{tail:.6,head:1.3,shadow:false});});
+  trN.forEach(f=>{const [x,y]=f.pts[0],col=FAC[f.cat].c;c.beginPath();c.moveTo(x,y);c.lineTo(cx,cy);c.setLineDash([2*k,6*k]);c.strokeStyle=hexA(col,.8);c.lineWidth=2*k;c.lineCap="round";c.stroke();c.setLineDash([]);
+   const dm=Math.round(distToSite(x,y)*mpp());pin(c,x,y,col,FAC[f.cat].s,k,14);label(c,`${f.name||FAC[f.cat].n} · ${dm} m`,x,y+30*k,k,{size:11.5,color:col,bold:true});});
+  items("entryCar").concat(items("entryPed")).forEach(e=>{const [x,y]=e.pts[0],car=e.type==="entryCar",col=car?"#c92a2a":"#1971c2";
+   const dx=cx-x,dy=cy-y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,p0=[x-ux*95*k-uy*30*k,y-uy*95*k+ux*30*k],p2=[x+ux*18*k,y+uy*18*k],p1=[x-ux*40*k-uy*30*k,y-uy*40*k+ux*30*k];
+   flowArrow(c,quadPts(p0,p1,p2),24*k,col,{a0:.1,tail:.3});
+   pin(c,x,y,col,car?"車":"人",k,15);label(c,e.name||(car?"車行出入口":"人行出入口"),p0[0]-ux*24*k,p0[1]-uy*24*k,k,{size:12,bold:true,color:"#fff",bg:hexA(col,.92)});});
+  siteTag(c,cx,cy,k);
+
+ });
+};
+const NOISE_BANDS=[[75,"#a61e4d"],[70,"#e03131"],[65,"#f76707"],[60,"#fcc419"],[55,"#94d82d"],[50,"#40c057"]];
+function noiseGrid(){
+ const pr=P.params,lv={main:+pr.pNMain||75,sec:+pr.pNSec||68,lane:+pr.pNLane||60};
+ const W=IMG.width,H=IMG.height,st=Math.max(3,Math.round(Math.max(W,H)/300)),gw=Math.ceil(W/st),gh=Math.ceil(H/st),g=new Float32Array(gw*gh);
+ const roads=items("road"),pts=items("noise");
+ for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const x=i*st+st/2,y=j*st+st/2;let E=0;
+  roads.forEach(r=>{const I0=Math.pow(10,lv[r.cls]/10),hw=(r.width||10)/2;for(let s=0;s<r.pts.length-1;s++){const a=r.pts[s],b=r.pts[s+1],dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy);if(L<1e-6)continue;const ux=dx/L,uy=dy/L,s1=((a[0]-x)*ux+(a[1]-y)*uy)*mpp(),s2=s1+L*mpp(),dp=Math.max(Math.abs((x-a[0])*uy-(y-a[1])*ux)*mpp()-hw,0)+3;E+=I0*(10/dp)*Math.abs(Math.atan(s2/dp)-Math.atan(s1/dp))/Math.PI;}});
+  pts.forEach(p=>{const dm=Math.max(Math.hypot(x-p.pts[0][0],y-p.pts[0][1])*mpp(),3);E+=Math.pow(10,(p.db-20*Math.log10(dm/10))/10);});
+  g[j*gw+i]=E>0?10*Math.log10(E):0;}
+ const at=(x,y)=>g[Math.min(gh-1,Math.max(0,Math.floor(y/st)))*gw+Math.min(gw-1,Math.max(0,Math.floor(x/st)))];
+ return {g,gw,gh,st,lv,at};
+}
+G.noise=(d,i)=>{
+ const N=noiseGrid();let mx=0,mn=999,sum=0,cnt=0,worst=null;
+ if(P.site.length>2)for(let j=0;j<N.gh;j++)for(let q=0;q<N.gw;q++){const x=q*N.st+N.st/2,y=j*N.st+N.st/2;if(inPoly(x,y,P.site)){const v=N.g[j*N.gw+q];sum+=v;cnt++;if(v>mx){mx=v;worst=[x,y];}if(v<mn)mn=v;}}
+ const legend=[{s:"grad",stops:["rgba(64,192,87,.5)","#94d82d","#fcc419","#f76707","#e03131","#a61e4d"],l:"50 → 75+ dB(A) 連續色階"},{s:"line",c:"#adb5bd",w:1.5,dash:[5,4],l:"等噪音線 55／60／65／70／75 dB"},{s:"fill",c:"rgba(166,30,77,.6)",l:"≥ 75 dB(A) 高噪音"},{s:"fill",c:"rgba(247,103,7,.5)",l:"65–70 dB(A)"},{s:"fill",c:"rgba(252,196,25,.5)",l:"60 dB(A) 左右"},{s:"fill",c:"rgba(148,216,45,.45)",l:"≤ 55 dB(A) 較安靜"},...[].map(([v,col],j)=>({s:"fill",c:col+"bb",l:j?`${v}–${NOISE_BANDS[j-1][0]} dB(A)`:`≥ ${v} dB(A)`})),{s:"dot",c:"#d9480f",t:"噪",l:"點噪音源"},{s:"fill",c:"rgba(192,57,43,.1)",b:"#c0392b",dash:[6,3],l:"基地"}];
+ const notes=[cnt?`基地內估算：最高 ${mx.toFixed(0)}、最低 ${mn.toFixed(0)}、平均 ${(sum/cnt).toFixed(0)} dB(A)`:"尚未畫基地範圍",
+  `估算方式：道路視為有限長度線音源（距離加倍衰減 3 dB，依路段張角修正）、噪音點視為點音源（距離加倍衰減 6 dB），再做能量加總。參考值：主要幹道 ${N.lv.main}、次要道路 ${N.lv.sec}、巷道 ${N.lv.lane} dB(A)（距 10 m，示意值，可在參數修改）。`,"未計入建物遮蔽、反射與地面吸收，屬初步示意；正式評估請以實測或噪音模擬軟體為準。"];
+ let concl=P.site.length>2?"尚未標記道路或噪音源，無法估算噪音。":"尚未畫基地範圍。";
+ if(cnt&&worst&&mx>0){const [cx,cy]=polyCentroid(P.site);let quiet=null,qv=999;siteEdges().forEach(e=>{const m=[(e.a[0]+e.b[0])/2,(e.a[1]+e.b[1])/2],v=N.at(...m);if(v<qv){qv=v;quiet=m;}});
+  concl=`基地${dirName(bearingOf(worst[0]-cx,worst[1]-cy))}側最吵（約 ${mx.toFixed(0)} dB），宜配置緩衝空間、服務核或隔音綠帶；${dirName(bearingOf(quiet[0]-cx,quiet[1]-cy))}側較安靜（約 ${qv.toFixed(0)} dB），適合臥室、教室等安靜空間。`;}
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H);drawRoadsGrey(c,k);
+  const STOPS=[[45,[64,192,87,0]],[50,[64,192,87,.35]],[55,[148,216,45,.42]],[60,[252,196,25,.48]],[65,[247,103,7,.52]],[70,[224,49,49,.58]],[75,[166,30,77,.66]],[85,[110,10,60,.72]]];
+  const col=v=>{if(v<=STOPS[0][0])return STOPS[0][1];for(let j=1;j<STOPS.length;j++)if(v<=STOPS[j][0]){const [a,ca]=STOPS[j-1],[b,cb]=STOPS[j],t=(v-a)/(b-a);return ca.map((x,q)=>x+(cb[q]-x)*t);}return STOPS[STOPS.length-1][1];};
+  const L=document.createElement("canvas");L.width=N.gw;L.height=N.gh;const l=L.getContext("2d"),im=l.createImageData(N.gw,N.gh);
+  for(let q=0;q<N.g.length;q++){const [r,g2,b,a]=col(N.g[q]);im.data[q*4]=r;im.data[q*4+1]=g2;im.data[q*4+2]=b;im.data[q*4+3]=a*255;}
+  l.putImageData(im,0,0);c.save();c.imageSmoothingEnabled=true;c.globalCompositeOperation=TH.heat;c.filter=`blur(${4*k*RS}px)`;c.drawImage(L,0,0,N.gw*N.st,N.gh*N.st);c.restore();c.filter="none";
+  c.save();c.globalAlpha=.6;drawBldgGrey(c,k);c.restore();
+  // 等噪音線
+  [55,60,65,70,75].forEach(lv=>{c.beginPath();for(let j=0;j<N.gh-1;j++)for(let q=0;q<N.gw-1;q++){const v=[N.g[j*N.gw+q],N.g[j*N.gw+q+1],N.g[(j+1)*N.gw+q+1],N.g[(j+1)*N.gw+q]],x=q*N.st+N.st/2,y=j*N.st+N.st/2,C=[[x,y],[x+N.st,y],[x+N.st,y+N.st],[x,y+N.st]],sg=[];
+    for(let e=0;e<4;e++){const a=v[e],b=v[(e+1)%4];if((a<lv)!==(b<lv)){const t=(lv-a)/(b-a);sg.push([C[e][0]+t*(C[(e+1)%4][0]-C[e][0]),C[e][1]+t*(C[(e+1)%4][1]-C[e][1])]);}}
+    if(sg.length>=2){c.moveTo(...sg[0]);c.lineTo(...sg[1]);}}
+   c.strokeStyle=TH.dark?"rgba(255,255,255,.5)":"rgba(255,255,255,.85)";c.lineWidth=1.2*k;c.setLineDash([5*k,4*k]);c.stroke();c.setLineDash([]);});
+  items("noise").forEach(p=>{const [x,y]=p.pts[0];for(let r=1;r<=4;r++){c.beginPath();c.arc(x,y,r*15*k,0,7);c.strokeStyle=hexA("#e8590c",.9-r*.18);c.lineWidth=2*k;c.stroke();}
+   pin(c,x,y,"#e8590c","噪",k,13);label(c,`${p.name||"噪音源"} · ${p.db} dB`,x,y+36*k,k,{size:11.5,bold:true,color:"#e8590c"});});
+  drawSite(c,k,{label:false});
+  const [cx,cy]=polyCentroid(P.site);label(c,cnt?`基地平均 ${(sum/cnt).toFixed(0)} dB(A)`:"基地",cx,cy,k,{bold:true,color:"#fff",bg:hexA(TH.site,.95),size:13});
+
+ });
+};
+
+G.view=(d,i)=>{
+ const half=+P.params.pCone||18;const [cx,cy]=polyCentroid(P.site);
+ const good=items("viewGood"),bad=items("viewBad"),dirOf=v=>dirName(bearingOf(v.pts[0][0]-cx,v.pts[0][1]-cy));
+ const legend=[{s:"fill",c:"rgba(47,158,68,.45)",l:"良好景觀視野（宜開窗、引景）"},{s:"fill",c:"rgba(73,80,87,.45)",l:"不良景觀（宜遮蔽、轉向）"},{s:"line",c:"#e8590c",w:3,dash:[4,4],l:"由外部看向基地（被看見）"},{s:"fill",c:"rgba(192,57,43,.22)",b:"#c0392b",dash:[6,3],l:"基地（視點）"}];
+ const notes=[...good.map(v=>`景觀「${v.name||"景觀"}」：位於${dirOf(v)}方，距約 ${Math.round(Math.hypot(v.pts[0][0]-cx,v.pts[0][1]-cy)*mpp())} m`),
+  ...bad.map(v=>`不良景觀「${v.name||""}」：位於${dirOf(v)}方`),`視野錐角 ±${half}°，視點為基地中心。未計算建物遮擋，請現場確認視線是否通透。`];
+ const concl=(good.length?`主要景觀在${uniq(good.map(dirOf)).join("、")}方，主要空間與大面開窗宜面向該側`:"尚未標記景觀點")+(bad.length?`；${uniq(bad.map(dirOf)).join("、")}側以實牆、植栽或服務空間遮蔽。`:"。");
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H);drawRoadsGrey(c,k);drawBldgGrey(c,k);
+  const cone=(v,ok)=>{const [x,y]=v.pts[0];const a=Math.atan2(y-cy,x-cx),L=Math.hypot(x-cx,y-cy)*1.12,h=half*RAD,col=ok?"#2f9e44":"#495057";
+   c.save();const gr=c.createRadialGradient(cx,cy,0,cx,cy,L);gr.addColorStop(0,hexA(col,ok?.55:.5));gr.addColorStop(.75,hexA(col,.18));gr.addColorStop(1,hexA(col,0));
+   c.filter=`blur(${2*k*RS}px)`;c.beginPath();c.moveTo(cx,cy);c.arc(cx,cy,L,a-h,a+h);c.closePath();c.fillStyle=gr;c.fill();c.filter="none";c.restore();
+   if(!ok){c.save();c.beginPath();c.moveTo(cx,cy);c.arc(cx,cy,L*0.9,a-h,a+h);c.closePath();c.clip();c.strokeStyle=hexA(col,.35);c.lineWidth=1.2*k;c.beginPath();for(let s=-W-H;s<W+H;s+=10*k){c.moveTo(s,0);c.lineTo(s+H,H);}c.stroke();c.restore();}
+   [a-h,a+h].forEach(b=>{c.beginPath();c.moveTo(cx,cy);c.lineTo(cx+Math.cos(b)*L*0.95,cy+Math.sin(b)*L*0.95);c.strokeStyle=hexA(col,.8);c.lineWidth=1.3*k;c.setLineDash([6*k,4*k]);c.stroke();c.setLineDash([]);});
+   const step=m2px(50);for(let r=step;r<L*0.95;r+=step){c.beginPath();c.arc(cx,cy,r,a-h,a+h);c.strokeStyle=hexA(col,.35);c.lineWidth=.9*k;c.stroke();}
+   if(!ok){const mx=cx+Math.cos(a)*L*0.42,my=cy+Math.sin(a)*L*0.42,hl=Math.tan(h)*L*0.42;c.save();softShadow(c,k,8,3);c.beginPath();c.moveTo(mx-Math.sin(a)*hl,my+Math.cos(a)*hl);c.lineTo(mx+Math.sin(a)*hl,my-Math.cos(a)*hl);c.strokeStyle=TH.dark?"#ced4da":"#343a40";c.lineWidth=8*k;c.lineCap="round";c.stroke();c.restore();
+    label(c,"遮蔽 SCREEN",mx-Math.sin(a)*(hl+44*k),my+Math.cos(a)*(hl+44*k),k,{size:10.5,bold:true});}
+   else{const bx=cx+Math.cos(a)*L*0.8+Math.sin(a)*46*k,by=cy+Math.sin(a)*L*0.8-Math.cos(a)*46*k;c.beginPath();c.moveTo(bx,by);c.lineTo(cx+Math.sin(a)*24*k,cy-Math.cos(a)*24*k);c.setLineDash([4*k,5*k]);c.strokeStyle="#f76707";c.lineWidth=2*k;c.stroke();c.setLineDash([]);
+    const ea=Math.atan2(cy-Math.cos(a)*24*k-by,cx+Math.sin(a)*24*k-bx);arrow(c,cx+Math.sin(a)*24*k-Math.cos(ea)*10*k,cy-Math.cos(a)*24*k-Math.sin(ea)*10*k,cx+Math.sin(a)*24*k,cy-Math.cos(a)*24*k,"#f76707",2*k,11*k);}
+   flowArrow(c,[[cx+Math.cos(a)*20*k,cy+Math.sin(a)*20*k],[x-Math.cos(a)*18*k,y-Math.sin(a)*18*k]],12*k,col,{tail:.3,shadow:false,a0:.2});
+   pin(c,x,y,col,ok?"景":"✕",k,14);
+   label(c,(ok?"VIEW · ":"BAD VIEW · ")+(v.name||(ok?"景觀":"不良景觀")),x,y-32*k,k,{bold:true,size:12.5,color:"#fff",bg:hexA(col,.94)});};
+  bad.forEach(v=>cone(v,false));good.forEach(v=>cone(v,true));
+  drawSite(c,k,{label:false});
+  c.save();softShadow(c,k,10,2);c.beginPath();c.ellipse(cx,cy,17*k,10*k,0,0,7);c.fillStyle="#fff";c.fill();noShadow(c);c.strokeStyle=TH.site;c.lineWidth=2*k;c.stroke();c.beginPath();c.arc(cx,cy,5.5*k,0,7);c.fillStyle=TH.site;c.fill();c.restore();
+  siteTag(c,cx,cy+30*k,k,"視點 VIEWPOINT");
+
+ });
+};
+function arrowDash(c,x1,y1,x2,y2,col,k){c.save();c.setLineDash([6*k,6*k]);c.beginPath();c.moveTo(x1,y1);c.lineTo(x2,y2);c.strokeStyle=col;c.lineWidth=2.5*k;c.stroke();c.restore();arrow(c,x2-(x2-x1)*0.001,y2-(y2-y1)*0.001,x2,y2,col,2.5*k,12*k);}
+
+G.fac=(d,i)=>{
+ const [cx,cy]=polyCentroid(P.site),fac=items("fac"),zones=items("zone"),dist=f=>distToSite(...f.pts[0])*mpp();
+ const cnt={};fac.forEach(f=>{const dm=dist(f);cnt[f.cat]=cnt[f.cat]||[0,0,0];cnt[f.cat][dm<=400?0:dm<=800?1:2]++;});
+ const legend=[...uniq(zones.map(z=>z.zone)).map(z=>({s:"fill",c:ZONE[z].c+"aa",l:ZONE[z].n})),...Object.keys(cnt).map(kk=>({s:"dot",c:FAC[kk].c,t:FAC[kk].s,l:`${FAC[kk].n}（400m內 ${cnt[kk][0]}／800m內 ${cnt[kk][0]+cnt[kk][1]}）`})),
+  {s:"ring",c:"#1f2a33",l:"步行 5 分（400 m）／10 分（800 m）"}];
+ const notes=["生活圈以步行約 80 m/分估算，距離自基地邊界起算。",zones.length?(zones.some(z=>z.src==="osm")?"土地使用由 OSM landuse／設施範圍推估，並非法定都市計畫分區，實際以都市計畫書圖為準。":"分區配色參考常見都市計畫圖慣例（示意），實際以都市計畫書圖為準。"):"可用「使用分區」工具描繪周邊土地使用分區。"];
+ fac.map(f=>({f,dm:dist(f)})).sort((a,b)=>a.dm-b.dm).slice(0,5).forEach(n=>notes.push(`${FAC[n.f.cat].n}${n.f.name?"「"+n.f.name+"」":""}：約 ${Math.round(n.dm)} m`));
+ const in400=fac.filter(f=>dist(f)<=400).length,top=Object.entries(cnt).sort((a,b)=>(b[1][0]+b[1][1])-(a[1][0]+a[1][1]))[0];
+ const missing=["mrt","school","park","shop","med"].filter(kk=>!cnt[kk]||cnt[kk][0]+cnt[kk][1]===0).map(kk=>FAC[kk].n);
+ const concl=`步行 5 分鐘內有 ${in400} 處設施${top?"，以"+FAC[top[0]].n+"最多":""}`+(missing.length?`；周邊缺少${missing.join("、")}，可作為計畫引入的機能`:"")+"，公共性空間宜朝向人流聚集方向。";
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H,{alpha:.35});
+  zones.forEach(z=>{polyPath(c,z.pts);c.fillStyle=ZONE[z.zone].c+"88";c.fill();c.strokeStyle=ZONE[z.zone].c;c.lineWidth=2*k;c.stroke();});
+  drawRoadsGrey(c,k);drawBldgGrey(c,k,"rgba(80,80,80,.22)");
+  zones.filter(z=>zones.length<=8||polyArea(z.pts)>W*H*0.012).forEach(z=>{const [x,y]=polyCentroid(z.pts);c.fillStyle=hexA(TH.ink,.7);c.font=`600 ${14*k}px ${SANS}`;c.textAlign="center";c.textBaseline="middle";c.fillText(ZONE[z.zone].n,x,y);});
+  {const g=c.createRadialGradient(cx,cy,0,cx,cy,m2px(800));g.addColorStop(0,hexA(TH.accent,.16));g.addColorStop(.5,hexA(TH.accent,.08));g.addColorStop(1,hexA(TH.accent,0));c.fillStyle=g;c.beginPath();c.arc(cx,cy,m2px(800),0,7);c.fill();}
+  [400,800].forEach((m,j)=>{const r=m2px(m);c.beginPath();c.arc(cx,cy,r,0,7);c.setLineDash([14*k,8*k]);c.strokeStyle=TH.ink;c.lineWidth=(j?2:3)*k;c.stroke();c.setLineDash([]);
+   const ax=cx+r*Math.cos(-0.75),ay=cy+r*Math.sin(-0.75);if(ax>0&&ax<W&&ay>0&&ay<H)label(c,`${m} m · 步行 ${m/80} 分鐘`,ax,ay,k,{bold:true,size:12.5,bg:TH.ink,color:TH.paper});});
+  drawSite(c,k,{label:false});
+  const nearF=new Set(fac.map(f=>({f,m:dist(f)})).sort((a,b)=>a.m-b.m).slice(0,14).map(x=>x.f));
+  fac.forEach(f=>{const [x,y]=f.pts[0],F=FAC[f.cat];if(!nearF.has(f)){pin(c,x,y,F.c,F.s,k,10);return;}c.beginPath();c.moveTo(cx,cy);c.lineTo(x,y);c.strokeStyle=F.c+"99";c.lineWidth=1.5*k;c.setLineDash([4*k,4*k]);c.stroke();c.setLineDash([]);
+   pin(c,x,y,F.c,F.s,k,14);label(c,(f.name||F.n)+` ${Math.round(distToSite(x,y)*mpp())}m`,x,y+28*k,k,{size:11,color:F.c,bold:true});});
+  siteTag(c,cx,cy,k);
+ });
+};
+
+G.fg=(d,i)=>{
+ const pr=P.params,mode=pr.pFg||"auto",useDrawn=mode==="drawn"||(mode==="auto"&&items("bldg").length>0);
+ const W=IMG.width,H=IMG.height;
+ const L=document.createElement("canvas");L.width=W;L.height=H;const l=L.getContext("2d");l.fillStyle="#fff";l.fillRect(0,0,W,H);
+ if(useDrawn){l.fillStyle="#111";items("bldg").forEach(b=>{polyPath(l,b.pts);l.fill();});}
+ else{l.drawImage(IMG,0,0);const im=l.getImageData(0,0,W,H),t=+pr.pFgT||150,inv=!!pr.pFgInv;for(let q=0;q<im.data.length;q+=4){const y=0.299*im.data[q]+0.587*im.data[q+1]+0.114*im.data[q+2];let b=y<t;if(inv)b=!b;const v=b?17:255;im.data[q]=im.data[q+1]=im.data[q+2]=v;im.data[q+3]=255;}l.putImageData(im,0,0);}
+ const px=l.getImageData(0,0,W,H).data;let black=0,tot=0;for(let q=0;q<px.length;q+=16){tot++;if(px[q]<128)black++;}const ratio=black/tot;
+ const legend=[{s:"fill",c:TH.dark?"#f1f3f5":"#111",l:"建築實體（圖 Figure）"},{s:"fill",c:TH.paper,b:"#999",l:"開放空間（底 Ground）"},{s:"fill",c:hexA(TH.site,.5),b:TH.site,l:"基地"}];
+ const notes=[`來源：${useDrawn?(items("bldg").some(b=>b.src==="osm")?`OpenStreetMap 建築輪廓（${items("bldg").length} 棟，OSM 未收錄者不會顯示）`:"使用者標記的建築輪廓"):"依底圖亮度自動判斷（門檻 "+(pr.pFgT||150)+(pr.pFgInv?"，反轉":"")+"）"}`,`圖面建物覆蓋率約 ${(ratio*100).toFixed(1)}%（全圖範圍）`,"圖底關係用來閱讀街廓尺度、建築密度與開放空間的連續性。自動模式建議使用建物為深色的底圖，或調整門檻與反轉。"];
+ const concl=`周邊建物覆蓋率約 ${(ratio*100).toFixed(0)}%，`+(ratio>0.45?"紋理緊密、開放空間稀少，基地可釋出公共開放空間補足都市空隙。":ratio>0.25?"紋理中等，建議延續既有街廓尺度與建築退縮線。":"紋理鬆散，量體配置可主動界定街道與廣場邊界。");
+ return frame(d,i,legend,notes,concl,(c,W2,H2,k)=>{c.save();if(TH.dark){c.filter="invert(1)";c.drawImage(L,0,0,W,H);c.filter="none";c.globalCompositeOperation="screen";c.fillStyle=TH.paper;c.fillRect(0,0,W,H);}else{c.drawImage(L,0,0,W,H);c.globalCompositeOperation="multiply";c.fillStyle=TH.paper;c.fillRect(0,0,W,H);}c.restore();drawSite(c,k,{label:false,fill:hexA(TH.site,.55)});const [x,y]=polyCentroid(P.site);siteTag(c,x,y,k);});
+};
+
+function unionArea(ps){if(!ps.length)return 0;const s=Math.max(1,Math.max(IMG.width,IMG.height)/800),cv=document.createElement("canvas");cv.width=Math.ceil(IMG.width/s);cv.height=Math.ceil(IMG.height/s);const g=cv.getContext("2d",{willReadFrequently:true});g.scale(1/s,1/s);g.fillStyle="#000";ps.forEach(p=>{polyPath(g,p.pts);g.fill();});const d=g.getImageData(0,0,cv.width,cv.height).data;let n=0;for(let q=3;q<d.length;q+=4)n+=d[q]/255;return n*s*s;}
+G.green=(d,i)=>{
+ const gs=items("green"),ws=items("water"),parks=items("fac").filter(f=>f.cat==="park");const [cx,cy]=polyCentroid(P.site);
+ const near=arr=>{let b=null,bd=1e12;arr.forEach(g=>{const dd=g.pts.length>2?(inPoly(cx,cy,g.pts)?0:distPolyline(cx,cy,[...g.pts,g.pts[0]])):Math.hypot(cx-g.pts[0][0],cy-g.pts[0][1]);if(dd<bd){bd=dd;b=g;}});return b?{g:b,m:bd*mpp()}:null;};
+ const ng=near(gs.length?gs:parks),nw=near(ws);
+ const legend=[{s:"fill",c:"rgba(64,192,87,.6)",b:"#2b8a3e",l:"綠地／公園"},{s:"fill",c:"rgba(51,154,240,.55)",b:"#1864ab",l:"水體／河川"},{s:"line",c:"#2b8a3e",w:4,dash:[6,4],l:"建議綠色連結"},{s:"line",c:"#1864ab",w:4,dash:[6,4],l:"建議藍色連結（親水）"},{s:"fill",c:"rgba(192,57,43,.22)",b:"#c0392b",dash:[6,3],l:"基地"}];
+ const notes=[ng?`最近綠地「${ng.g.name||"綠地"}」約 ${Math.round(ng.m)} m（自基地中心）`:"未標記綠地",nw?`最近水體「${nw.g.name||"水體"}」約 ${Math.round(nw.m)} m`:"未標記水體",`畫面內綠地面積合計約 ${Math.round(unionArea(gs)*mpp()*mpp()).toLocaleString()} m²`];
+ const concl=ng?`基地距${ng.g.name||"綠地"}約 ${Math.round(ng.m)} m，可用綠廊、林蔭步道串連周邊綠網`+(nw?`，並回應${nw.g.name||"水體"}的親水與防洪（滯洪、透水）需求。`:"。"):"周邊綠地不足，基地內宜提高綠覆率與透水鋪面。";
+ return frame(d,i,legend,notes,concl,(c,W,H,k)=>{
+  drawBase(c,W,H,{alpha:.3});drawRoadsGrey(c,k);drawBldgGrey(c,k,"rgba(80,80,80,.2)");
+  ws.forEach(w=>{polyPath(c,w.pts);c.fillStyle="rgba(51,154,240,.55)";c.fill();c.strokeStyle="#1864ab";c.lineWidth=2.5*k;c.stroke();c.save();polyPath(c,w.pts);c.clip();c.strokeStyle="rgba(255,255,255,.7)";c.lineWidth=2*k;const bb=bbox(w.pts);for(let y=bb[1];y<bb[3];y+=18*k){c.beginPath();for(let x=bb[0];x<bb[2];x+=6*k)c.lineTo(x,y+Math.sin(x/(10*k))*3*k);c.stroke();}c.restore();});
+  gs.forEach(g=>{polyPath(c,g.pts);c.fillStyle="rgba(64,192,87,.55)";c.fill();c.strokeStyle="#2b8a3e";c.lineWidth=2.5*k;c.stroke();c.save();polyPath(c,g.pts);c.clip();const bb=bbox(g.pts);let row=0;for(let y=bb[1];y<bb[3];y+=30*k,row++)for(let x=bb[0]+(row%2)*15*k;x<bb[2];x+=30*k){c.beginPath();c.arc(x,y,8*k,0,7);c.fillStyle="rgba(43,138,62,.55)";c.fill();}c.restore();});
+  ws.concat(gs).filter(g=>ws.length+gs.length<=10||polyArea(g.pts)>W*H*0.004).forEach(g=>{if(g.name){const [x,y]=polyCentroid(g.pts);label(c,g.name,x,y,k,{bold:true,size:14,color:g.type==="water"?"#1864ab":"#2b8a3e"});}});
+  parks.forEach(f=>pin(c,...f.pts[0],FAC.park.c,"園",k,13));
+  drawSite(c,k,{label:false});
+  [[ng,"#2b8a3e"],[nw,"#1864ab"]].filter(a=>a[0]).forEach(([n,col])=>{const t=n.g.pts.length>2?polyCentroid(n.g.pts):n.g.pts[0];c.beginPath();c.moveTo(cx,cy);c.lineTo(...t);c.setLineDash([10*k,8*k]);c.strokeStyle=col;c.lineWidth=4*k;c.stroke();c.setLineDash([]);label(c,`${Math.round(n.m)} m`,(cx+t[0])/2,(cy+t[1])/2,k,{bold:true,size:12,color:col});});
+  siteTag(c,cx,cy,k);
+ });
+};
+
+G.topo=(d,i)=>{
+ const E=items("elev"),ci=+P.params.pCi||1;
+ const legend=[{s:"fill",c:"#2f9e44",l:"低"},{s:"fill",c:"#f0e68c",l:"中"},{s:"fill",c:"#a0522d",l:"高"},{s:"line",c:"#5c3d2e",w:2,l:`等高線（間距 ${ci} m，粗線每 ${ci*5} m）`},{s:"dot",c:"#8d6e63",t:"▲",l:"高程點"},{s:"arrow",c:"#1c7ed6",w:3,l:"地表逕流方向（往下坡）"}];
+ if(E.length<3)return frame(d,i,legend,["需要至少 3 個高程點才能內插地形。請用「高程點」工具標記（可參考地形圖、內政部數值地形模型 DTM 或現場測量）。"],"高程資料不足，無法判讀地形。",(c,W,H,k)=>{drawBase(c,W,H);drawSite(c,k);label(c,"請標記至少 3 個高程點",W/2,H/2,k,{size:22,bold:true,border:"#c0392b"});});
+ const W=IMG.width,H=IMG.height,st=Math.max(4,Math.round(Math.max(W,H)/220)),gw=Math.ceil(W/st)+1,gh=Math.ceil(H/st)+1,g=new Float32Array(gw*gh);
+ const DG=P.geo&&P.geo.demGrid&&E.length===P.geo.demGrid[0]*P.geo.demGrid[1]&&E.every(e=>e.src==="dem")?P.geo.demGrid:null;
+ if(DG){const [nx,ny]=DG;for(let j=0;j<gh;j++)for(let q=0;q<gw;q++){const fx=Math.max(0,Math.min(nx-1.0001,(q*st)/W*nx-0.5)),fy=Math.max(0,Math.min(ny-1.0001,(j*st)/H*ny-0.5)),i0=Math.floor(fx),j0=Math.floor(fy),tx=fx-i0,ty=fy-j0,z=(a,b2)=>E[b2*nx+a].z;g[j*gw+q]=z(i0,j0)*(1-tx)*(1-ty)+z(i0+1,j0)*tx*(1-ty)+z(i0,j0+1)*(1-tx)*ty+z(i0+1,j0+1)*tx*ty;}}
+ else for(let j=0;j<gh;j++)for(let q=0;q<gw;q++){const x=q*st,y=j*st;let ws=0,vs=0,hit=null;for(const e of E){const dd=Math.hypot(x-e.pts[0][0],y-e.pts[0][1]);if(dd<1){hit=e.z;break;}const w=1/(dd*dd);ws+=w;vs+=w*e.z;}g[j*gw+q]=hit!=null?hit:vs/ws;}
+ const zs=E.map(e=>e.z),zmin=Math.min(...zs),zmax=Math.max(...zs);legend[0].l=`低（${zmin} m）`;legend[2].l=`高（${zmax} m）`;
+ let sMin=1e9,sMax=-1e9,lo=null,hi=null;if(P.site.length>2)for(let j=0;j<gh;j++)for(let q=0;q<gw;q++){const x=q*st,y=j*st;if(inPoly(x,y,P.site)){const v=g[j*gw+q];if(v<sMin){sMin=v;lo=[x,y];}if(v>sMax){sMax=v;hi=[x,y];}}}
+ const [cx,cy]=polyCentroid(P.site);
+ const notes=[(DG?`高程範圍 ${zmin}–${zmax} m（Copernicus DEM GLO-90 經 Open-Meteo 取樣 ${DG[0]}×${DG[1]} 格點，雙線性內插）。此資料為 90 m 解析度的數值表面模型，可能含部分建物／植被高度，僅供大尺度地勢參考；細部請改用內政部 DTM 或測量圖。`:`高程範圍 ${zmin}–${zmax} m（以反距離權重法 IDW 內插 ${E.length} 個高程點）`),lo?`基地內約 ${sMin.toFixed(1)}–${sMax.toFixed(1)} m，高差 ${(sMax-sMin).toFixed(1)} m，平均坡度約 ${((sMax-sMin)/(Math.hypot(hi[0]-lo[0],hi[1]-lo[1])*mpp()||1)*100).toFixed(1)}%`:"","內插地形僅供概念階段參考，正式設計請以測量圖為準。"].filter(Boolean);
+ const concl=lo?`基地由${dirName(bearingOf(hi[0]-cx,hi[1]-cy))}側（高）往${dirName(bearingOf(lo[0]-cx,lo[1]-cy))}側（低）傾斜，高差約 ${(sMax-sMin).toFixed(1)} m；排水、滯洪設施宜設在低側，入口與地下室出入可利用高差安排。`+(DG?"（90 m 表面模型推估，市區易受建物高度影響，請以測量圖確認）":""):"請畫基地範圍以計算基地內坡度。";
+ return frame(d,i,legend,notes,concl,(c,W2,H2,k)=>{
+  drawBase(c,W,H,{alpha:.25});
+  const L=document.createElement("canvas");L.width=gw;L.height=gh;const l=L.getContext("2d"),im=l.createImageData(gw,gh);
+  const stops=[[47,158,68],[240,230,140],[160,82,45]],ramp=t=>{const u=t*2,a=Math.min(1,Math.floor(u)),f=u-a;return stops[a].map((v,j)=>v+(stops[a+1][j]-v)*f);};
+  for(let q=0;q<g.length;q++){const t=Math.max(0,Math.min(1,(g[q]-zmin)/((zmax-zmin)||1)));const [r,gg,b]=ramp(t);im.data[q*4]=r;im.data[q*4+1]=gg;im.data[q*4+2]=b;im.data[q*4+3]=120;}
+  l.putImageData(im,0,0);c.drawImage(L,0,0,gw*st,gh*st);
+  c.strokeStyle=TH.dark?"rgba(255,230,200,.75)":"#5c3d2e";c.lineCap="round";
+  for(let lv=Math.ceil(zmin/ci)*ci;lv<=zmax;lv+=ci){const major=Math.abs(lv/(ci*5)-Math.round(lv/(ci*5)))<1e-6;c.lineWidth=(major?2.6:1.2)*k;c.beginPath();const labs=[];
+   for(let j=0;j<gh-1;j++)for(let q=0;q<gw-1;q++){const v=[g[j*gw+q],g[j*gw+q+1],g[(j+1)*gw+q+1],g[(j+1)*gw+q]],x=q*st,y=j*st,C=[[x,y],[x+st,y],[x+st,y+st],[x,y+st]],segs=[];
+    for(let e=0;e<4;e++){const a=v[e],b=v[(e+1)%4];if((a<lv)!==(b<lv)){const t=(lv-a)/(b-a),pa=C[e],pb=C[(e+1)%4];segs.push([pa[0]+t*(pb[0]-pa[0]),pa[1]+t*(pb[1]-pa[1])]);}}
+    if(segs.length>=2){c.moveTo(...segs[0]);c.lineTo(...segs[1]);if((q*7+j*13)%97===0)labs.push(segs[0]);}if(segs.length===4){c.moveTo(...segs[2]);c.lineTo(...segs[3]);}}
+   c.stroke();labs.slice(0,3).forEach(p=>label(c,lv+" m",p[0],p[1],k,{size:10.5,color:"#5c3d2e"}));}
+  const sp=Math.max(6,Math.round(120*k/st));
+  for(let j=Math.floor(sp/2);j<gh-1;j+=sp)for(let q=Math.floor(sp/2);q<gw-1;q+=sp){const gx=(g[j*gw+q+1]-g[j*gw+q])/st,gy=(g[(j+1)*gw+q]-g[j*gw+q])/st,m=Math.hypot(gx,gy);if(m<1e-6)continue;const x=q*st,y=j*st;arrow(c,x,y,x-gx/m*34*k,y-gy/m*34*k,"rgba(28,126,214,.8)",2.5*k,9*k);}
+  E.forEach(e=>{const [x,y]=e.pts[0];if(DG){c.beginPath();c.arc(x,y,3*k,0,7);c.fillStyle="#5c3d2e";c.fill();c.fillStyle=TH.dark?"#f1f3f5":"#3e2723";c.font=`600 ${9.5*k}px ${LATIN}`;c.textAlign="center";c.textBaseline="bottom";c.fillText(e.z+"",x,y-5*k);return;}pin(c,x,y,"#8d6e63","▲",k,10);label(c,e.z+" m",x,y-22*k,k,{size:12,bold:true,color:"#3e2723"});});
+  drawSite(c,k,{label:false,fill:"rgba(192,57,43,.12)"});siteTag(c,cx,cy,k);
+ });
+};
+
+/* SWOT 自動建議（依標記資料產生草稿） */
+function swotSuggest(){
+ readInputs();const S=[],Wk=[],O=[],T=[],pr=P.params;
+ const tr=items("fac").filter(f=>f.cat==="mrt"||f.cat==="bus").map(f=>({f,m:distToSite(...f.pts[0])*mpp()})).sort((a,b)=>a.m-b.m);
+ if(tr.length&&tr[0].m<500)S.push(`鄰近${FAC[tr[0].f.cat].n}${tr[0].f.name&&tr[0].f.name!==FAC[tr[0].f.cat].n?"「"+tr[0].f.name+"」":""}（約 ${Math.round(tr[0].m)} m），大眾運輸可及性佳`);else if(tr.length)Wk.push(`距大眾運輸約 ${Math.round(tr[0].m)} m，步行可及性一般`);else Wk.push("周邊未標記大眾運輸站點");
+ const good=items("viewGood");if(good.length)S.push(`擁有${good.map(g=>g.name||"景觀").join("、")}景觀視野`);
+ const mainR=items("road").filter(r=>r.cls==="main"&&(P.site.length<3||distPolyline(...polyCentroid(P.site),r.pts)*mpp()<Math.sqrt(polyArea(P.site))*mpp()/2+40));if(mainR.length)S.push(`臨${uniq(mainR.map(r=>r.name||"主要幹道")).join("、")}，臨街面寬、能見度高`);
+ if(P.site.length>2&&items("road").length+items("noise").length){const N=noiseGrid();let mx=0;for(let j=0;j<N.gh;j++)for(let q=0;q<N.gw;q++){const x=q*N.st+N.st/2,y=j*N.st+N.st/2;if(inPoly(x,y,P.site))mx=Math.max(mx,N.g[j*N.gw+q]);}if(mx>65)Wk.push(`臨路側噪音估計約 ${mx.toFixed(0)} dB(A)，需隔音緩衝`);}
+ Wk.push(`冬季${DIRS_ZH[+pr.pWinW||0]}風直吹，需防風設計`);
+ O.push(`夏季${DIRS_ZH[+pr.pWinS||0]}風可引入作自然通風`);
+ if(items("green").length+items("fac").filter(f=>f.cat==="park").length)O.push("可串連周邊公園綠地形成綠色廊道");
+ const pub=items("fac").filter(f=>["shop","school","civic","culture"].includes(f.cat)).length;if(pub)O.push(`周邊 ${pub} 處商業／公共設施可帶入人流與複合機能`);
+ const bad=items("viewBad");if(bad.length)T.push(`${bad.map(b=>b.name||"不良景觀").join("、")}影響視覺品質`);
+ if(items("noise").length)T.push(`${items("noise").map(n=>n.name||"噪音源").join("、")}的噪音干擾`);
+ const tall=items("bldg").filter(b=>(b.floors||0)>=10).length;if(tall)T.push(`周邊 ${tall} 棟 10 層以上建物造成日照遮蔽與壓迫感`);
+ T.push("夏季西曬與高溫，需遮陽與隔熱");
+ $("pS").value=S.join("\n");$("pW").value=Wk.join("\n");$("pO").value=O.join("\n");$("pT").value=T.join("\n");readInputs();
+}
+$("btnSwotAuto").onclick=swotSuggest;
+
+G.swot=(d,i)=>{
+ let pr=P.params;if(!pr.pS&&!pr.pW&&!pr.pO&&!pr.pT){swotSuggest();pr=P.params;}
+ const box=[["S 優勢 Strengths",pr.pS,"#2b8a3e"],["W 劣勢 Weaknesses",pr.pW,"#c92a2a"],["O 機會 Opportunities",pr.pO,"#1971c2"],["T 威脅 Threats",pr.pT,"#e67700"]];
+ const legend=[{s:"arrow",c:"#1c7ed6",w:4,l:"冬季風"},{s:"arrow",c:"#e8590c",w:4,l:"夏季風"},{s:"sun",l:"冬至正午太陽方向"},{s:"dot",c:"#b8322a",t:"車",l:"車行出入口"},{s:"dot",c:"#1c7ed6",t:"人",l:"人行出入口"},{s:"fill",c:"rgba(231,49,49,.4)",l:"主要噪音干擾側（>65 dB）"},{s:"fill",c:"rgba(47,158,68,.4)",l:"景觀開放面"}];
+ const k0=K(),tmp=document.createElement("canvas").getContext("2d");tmp.font=`${13*k0}px ${FONT}`;
+ const bl=txt=>wrapText(tmp,"• "+((txt||"（未填）").split("\n").filter(Boolean).join("\n• ")),(400-70)*k0);
+ let extra=0;box.forEach(b=>extra+=70+bl(b[1]).length*20);
+ return frame(d,i,legend,[],"主要空間朝向日照與景觀良好側；噪音與冬季風側以服務空間、植栽緩衝；人車出入口分流，人行入口面向大眾運輸。",(c,W,H,k)=>{
+  drawBase(c,W,H);drawRoadsGrey(c,k);drawBldgGrey(c,k);
+  const [cx,cy]=polyCentroid(P.site),R=Math.min(W,H)*0.32;
+  items("viewGood").forEach(v=>{const a=Math.atan2(v.pts[0][1]-cy,v.pts[0][0]-cx),g=c.createRadialGradient(cx,cy,0,cx,cy,R);g.addColorStop(0,hexA("#2f9e44",.5));g.addColorStop(1,hexA("#2f9e44",0));c.beginPath();c.moveTo(cx,cy);c.arc(cx,cy,R,a-0.32,a+0.32);c.closePath();c.fillStyle=g;c.fill();});
+  if(P.site.length>2&&items("road").length+items("noise").length){const N=noiseGrid(),eg=siteEdges().map(e=>({e,v:N.at((e.a[0]+e.b[0])/2+e.nx*10,(e.a[1]+e.b[1])/2+e.ny*10)})),vmax=Math.max(...eg.map(x=>x.v));
+   eg.forEach(({e,v})=>{if(v>65&&v>=vmax-3){const mx=(e.a[0]+e.b[0])/2,my=(e.a[1]+e.b[1])/2,g=c.createLinearGradient(mx,my,mx+e.nx*60*k,my+e.ny*60*k);g.addColorStop(0,"rgba(224,49,49,.55)");g.addColorStop(1,"rgba(224,49,49,0)");
+    c.beginPath();c.moveTo(...e.a);c.lineTo(...e.b);c.lineTo(e.b[0]+e.nx*60*k,e.b[1]+e.ny*60*k);c.lineTo(e.a[0]+e.nx*60*k,e.a[1]+e.ny*60*k);c.closePath();c.fillStyle=g;c.fill();
+    for(let t=0.15;t<0.9;t+=0.2){const x=e.a[0]+(e.b[0]-e.a[0])*t+e.nx*30*k,y=e.a[1]+(e.b[1]-e.a[1])*t+e.ny*30*k;c.beginPath();c.arc(x,y,9*k,Math.atan2(e.ny,e.nx)+Math.PI-0.7,Math.atan2(e.ny,e.nx)+Math.PI+0.7);c.strokeStyle="rgba(224,49,49,.85)";c.lineWidth=2*k;c.stroke();}}});}
+  drawSite(c,k,{label:false});
+  [[+pr.pWinW*22.5,"#1c7ed6",1],[+pr.pWinS*22.5,"#f76707",-1]].forEach(([az,col,bend])=>{const [vx,vy]=bearingVec(az),nx=-vy,ny=vx,p0=[cx+vx*R*1.1,cy+vy*R*1.1],p2=[cx+vx*R*0.5,cy+vy*R*0.5];flowArrow(c,quadPts(p0,[(p0[0]+p2[0])/2+nx*R*.15*bend,(p0[1]+p2[1])/2+ny*R*.15*bend],p2),36*k,col,{glow:true});});
+  const Yr=+(pr.pDate||"2026").slice(0,4),wn=solarPosition(Yr,12,21,720,P.lat,P.lon,P.tz),[sx,sy]=bearingVec(wn.az),ux=cx+sx*R*0.85,uy=cy+sy*R*0.85;
+  c.beginPath();c.moveTo(ux,uy);c.lineTo(cx,cy);c.setLineDash([8*k,5*k]);c.strokeStyle="rgba(250,176,5,.9)";c.lineWidth=3*k;c.stroke();c.setLineDash([]);
+  const gg=c.createRadialGradient(ux,uy,0,ux,uy,36*k);gg.addColorStop(0,"#fff9db");gg.addColorStop(.35,"#fcc419");gg.addColorStop(1,"rgba(250,176,5,0)");c.fillStyle=gg;c.beginPath();c.arc(ux,uy,36*k,0,7);c.fill();
+  items("entryCar").forEach(e=>pin(c,...e.pts[0],"#c92a2a","車",k,15));items("entryPed").forEach(e=>pin(c,...e.pts[0],"#1971c2","人",k,15));
+  siteTag(c,cx,cy,k);
+ },{legendW:400,extraH:extra+40,legendDraw:(c,x,y,w,k)=>{
+  box.forEach(([t,txt,col])=>{const lines=bl(txt),h=56*k+lines.length*20*k;
+   c.save();softShadow(c,k,14,4);rr(c,x,y,w,h,10*k);c.fillStyle=TH.card;c.fill();noShadow(c);c.restore();
+   c.save();rr(c,x,y,w,h,10*k);c.clip();c.fillStyle=col;c.fillRect(x,y,6*k,h);c.restore();
+   c.fillStyle=col;c.font=`300 ${40*k}px ${LATIN}`;c.textAlign="right";c.textBaseline="top";c.fillText(t[0],x+w-16*k,y+6*k);
+   c.fillStyle=TH.ink;c.font=`700 ${14*k}px ${SANS}`;c.textAlign="left";c.textBaseline="middle";c.fillText(t,x+22*k,y+24*k);
+   c.fillStyle=TH.sub;c.font=`${12.5*k}px ${SANS}`;lines.forEach((l,j)=>c.fillText(l,x+22*k,y+48*k+j*20*k));y+=h+14*k;});
+  return y+6*k;}});
+};
+
+/* ======================== 生成與匯出（v2） ======================== */
+function generate(){
+ if(!IMG){alert("請先上傳基地圖或載入範例");return [];}
+ readInputs();if(P.site.length<3)status("<b>提醒：</b>尚未畫基地範圍，將以圖面中心作為基地中心。");
+ TH=THEMES[$("pTheme").value]||THEMES.minimal;RS=+$("pRes").value||2;P.params.pTheme=$("pTheme").value;P.params.pRes=$("pRes").value;
+ const sel=[...document.querySelectorAll("#diagChecks input")].filter(x=>x.checked).map(x=>x.dataset.k);
+ OUT=[];let n=0;const total=DIAGS.filter(d=>sel.includes(d.k)).length;
+ DIAGS.forEach(d=>{if(!sel.includes(d.k))return;n++;FRAME_TOTAL=total;try{OUT.push({k:d.k,t:d.t,e:d.e,n,canvas:G[d.k](d,n)});}catch(err){console.error(d.k,err);OUT.push({k:d.k,t:d.t+"（錯誤："+err.message+"）",n,canvas:null,err:String(err&&err.stack||err)});}});
+ const gal=$("gallery");gal.innerHTML="";
+ OUT.forEach(o=>{const card=document.createElement("div");card.className="card";
+  if(o.canvas){const url=o.canvas.toDataURL("image/png");o.url=url;card.innerHTML=`<img src="${url}" alt=""><div class="cap"><span>${String(o.n).padStart(2,"0")} ${o.t}</span><button>下載 PNG</button></div>`;
+   card.querySelector("button").onclick=()=>o.canvas.toBlob(b=>download(b,fname(o)));card.querySelector("img").onclick=()=>{$("lightbox").querySelector("img").src=url;$("lightbox").style.display="flex";};}
+  else card.innerHTML=`<div class="cap">${o.t}</div>`;gal.appendChild(card);});
+ return OUT;
+}
+let FRAME_TOTAL=11;
+const fname=o=>`${String(o.n).padStart(2,"0")}_${o.k}_${o.t.replace(/[\\/:*?"<>|・ ]/g,"")}.png`;
+$("lightbox").onclick=()=>$("lightbox").style.display="none";
+$("btnGen").onclick=()=>{$("btnGen").textContent="生成中…";setTimeout(()=>{generate();$("btnGen").textContent="▶ 生成分析圖";$("results").scrollIntoView({behavior:"smooth"});},30);};
+function download(blob,name){const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},2000);}
+const CRC=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function makeZip(files){const enc=new TextEncoder(),parts=[],cd=[];let off=0;
+ files.forEach(f=>{const nm=enc.encode(f.name),crc=crc32(f.data),h=new DataView(new ArrayBuffer(30));
+  h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);h.setUint32(14,crc,true);h.setUint32(18,f.data.length,true);h.setUint32(22,f.data.length,true);h.setUint16(26,nm.length,true);
+  parts.push(new Uint8Array(h.buffer),nm,f.data);
+  const c=new DataView(new ArrayBuffer(46));c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);c.setUint32(16,crc,true);c.setUint32(20,f.data.length,true);c.setUint32(24,f.data.length,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+  cd.push(new Uint8Array(c.buffer),nm);off+=30+nm.length+f.data.length;});
+ const cdSize=cd.reduce((a,b)=>a+b.length,0),e=new DataView(new ArrayBuffer(22));e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);e.setUint32(12,cdSize,true);e.setUint32(16,off,true);
+ return new Blob([...parts,...cd,new Uint8Array(e.buffer)],{type:"application/zip"});}
+const toBytes=cv=>new Promise(r=>cv.toBlob(async b=>r(new Uint8Array(await b.arrayBuffer())),"image/png"));
+async function buildZip(){if(!OUT.length)generate();const files=[];for(const o of OUT)if(o.canvas)files.push({name:fname(o),data:await toBytes(o.canvas)});files.push({name:"00_board_分析圖版.png",data:await toBytes(makeBoard())});return makeZip(files);}
+async function exportZip(){if(!IMG){alert("請先上傳基地圖");return;}download(await buildZip(),(P.name||"site")+"_基地分析.zip");}
+
+/* 競圖／作品集式圖版 */
+function boardMetrics(){
+ const out=[];const area=P.site.length>2?polyArea(P.site)*mpp()*mpp():0;if(area)out.push(["基地面積",Math.round(area).toLocaleString(),"m²"]);
+ const Y=+((P.params.pDate||"2026").slice(0,4));out.push(["冬至正午太陽高度",solarPosition(Y,12,21,720,P.lat,P.lon,P.tz).alt.toFixed(1),"°"]);out.push(["夏至最高太陽高度",sunEvents(Y,6,21,P.lat,P.lon,P.tz).maxAlt.toFixed(1),"°"]);
+ const tr=items("fac").filter(f=>f.cat==="mrt"||f.cat==="bus").map(f=>distToSite(...f.pts[0])*mpp()).sort((a,b)=>a-b);if(tr.length)out.push(["最近大眾運輸",Math.round(tr[0]),"m"]);
+ out.push(["400 m 生活圈設施",items("fac").filter(f=>distToSite(...f.pts[0])*mpp()<=400).length,"處"]);
+ if(P.site.length>2&&items("road").length){const N=noiseGrid();let s=0,n=0;for(let j=0;j<N.gh;j++)for(let q=0;q<N.gw;q++){const x=q*N.st+N.st/2,y=j*N.st+N.st/2;if(inPoly(x,y,P.site)){s+=N.g[j*N.gw+q];n++;}}if(n)out.push(["基地平均噪音(估)",(s/n).toFixed(0),"dB"]);}
+ return out;
+}
+function makeBoard(){
+ if(!OUT.length)generate();const T=TH,list=OUT.filter(o=>o.canvas);const cols=3,cardW=1150,gap=56,M=90;
+ const sc=cardW/list[0].canvas.width,cardH=Math.max(...list.map(o=>o.canvas.height))*sc,headH=600;
+ const W=M*2+cols*cardW+(cols-1)*gap,rows=Math.ceil((list.length+1)/cols),H=M+headH+rows*(cardH+gap+40)+120;
+ const b=document.createElement("canvas");b.width=W;b.height=H;const c=b.getContext("2d");const SRS=RS;RS=1;
+ c.fillStyle=T.paper;c.fillRect(0,0,W,H);
+ c.fillStyle=T.accent;c.fillRect(M,M,160,10);
+ c.fillStyle=T.ink;c.font=`800 150px ${LATIN}`;c.textBaseline="alphabetic";c.textAlign="left";try{c.letterSpacing="6px";}catch(e){}c.fillText("SITE ANALYSIS",M-6,M+180);try{c.letterSpacing="0px";}catch(e){}
+ c.font=`700 64px ${T.titleFont}`;c.fillText((P.name||"基地分析")+"　基地分析圖版",M,M+280);
+ c.font=`28px ${SANS}`;c.fillStyle=T.sub;const desc=`位置 ${P.lat}°N, ${P.lon}°E｜比例 ${P.mpp?(+P.mpp).toFixed(3)+" m/px":"未設定"}｜北向偏角 ${P.north}°｜共 ${list.length} 張分析圖。太陽位置以 NOAA 演算法即時計算；風向資料來源見各圖說明。`;
+ wrapText(c,desc,W-2*M).forEach((t,i)=>c.fillText(t,M,M+340+i*42));
+ const ms=boardMetrics(),mw=360;ms.forEach(([t,v,u],i)=>{const x=M+i*mw,y0=M+400;c.fillStyle=T.line;c.fillRect(x,y0,1.5,110);c.fillStyle=T.accent;c.font=`300 64px ${LATIN}`;c.textAlign="left";c.fillText(String(v),x+22,y0+62);const vw=c.measureText(String(v)).width;c.font=`600 24px ${LATIN}`;c.fillText(u,x+30+vw,y0+62);c.fillStyle=T.sub;c.font=`24px ${SANS}`;c.fillText(t,x+24,y0+100);});
+ c.fillStyle=T.ink;c.fillRect(M,M+headH-50,W-2*M,3);
+ list.forEach((o,j)=>{const col=j%cols,row=Math.floor(j/cols),x=M+col*(cardW+gap),y=M+headH+row*(cardH+gap+40);
+  c.save();c.shadowColor=T.dark?"rgba(0,0,0,.6)":"rgba(40,30,20,.18)";c.shadowBlur=40;c.shadowOffsetY=14;c.fillStyle=T.card;c.fillRect(x,y,cardW,o.canvas.height*sc);c.restore();
+  c.drawImage(o.canvas,x,y,cardW,o.canvas.height*sc);});
+ const j=list.length,col=j%cols,row=Math.floor(j/cols),x=M+col*(cardW+gap),y=M+headH+row*(cardH+gap+40);
+ if(col!==0){c.fillStyle=T.card;c.save();c.shadowColor="rgba(0,0,0,.12)";c.shadowBlur=30;c.fillRect(x,y,cardW*(cols-col)+gap*(cols-col-1),cardH);c.restore();
+  c.fillStyle=T.ink;c.font=`700 40px ${T.titleFont}`;c.fillText("圖說索引 INDEX",x+60,y+100);c.font=`26px ${SANS}`;
+  list.forEach((o,i)=>{const cx2=x+60+Math.floor(i/6)*520,cy2=y+170+(i%6)*58;c.fillStyle=T.accent;c.font=`300 34px ${LATIN}`;c.fillText(String(o.n).padStart(2,"0"),cx2,cy2);c.fillStyle=T.ink;c.font=`26px ${SANS}`;c.fillText(o.t,cx2+70,cy2);});}
+ c.fillStyle=T.sub;c.font=`22px ${LATIN}`;c.textAlign="right";c.fillText("SITE ANALYSIS GENERATOR · "+new Date().toISOString().slice(0,10),W-M,H-50);
+ if(P.geo&&P.geo.attr){c.textAlign="left";c.font=`18px ${SANS}`;wrapText(c,P.geo.attr,W-2*M-700).slice(0,3).reverse().forEach((t,i)=>c.fillText(t,M,H-50-i*26));}
+ RS=1;applyGrain(c,0,0,W,H,T.grain*0.6);RS=SRS;
+ return b;
+}
+$("btnZip").onclick=exportZip;$("btnBoard").onclick=()=>{if(!IMG){alert("請先上傳基地圖");return;}makeBoard().toBlob(b=>download(b,(P.name||"site")+"_分析圖版.png"));};
+
+/* ======================== 範例基地（程式產生的虛構地圖） ======================== */
+function loadSample(cb){
+ const W=1400,H=1000,c=document.createElement("canvas");c.width=W;c.height=H;const g=c.getContext("2d");
+ let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646;};
+ g.fillStyle="#ebe7df";g.fillRect(0,0,W,H);
+ const river=[[0,690],[90,700],[250,840],[330,1000],[0,1000]];
+ const park=[880,560,1100,750],site=[560,300,760,465],school=[880,280,1100,470];
+ polyPath(g,river);g.fillStyle="#a9cbe6";g.fill();
+ g.fillStyle="#cfe5c2";g.fillRect(park[0],park[1],park[2]-park[0],park[3]-park[1]);
+ for(let n=0;n<40;n++){g.beginPath();g.arc(park[0]+15+rnd()*(park[2]-park[0]-30),park[1]+15+rnd()*(park[3]-park[1]-30),8+rnd()*6,0,7);g.fillStyle="#9fcf8f";g.fill();}
+ g.fillStyle="#e3dccb";g.fillRect(school[0]+20,school[1]+80,180,100);
+ g.fillStyle="#f6f3ec";g.fillRect(site[0],site[1],site[2]-site[0],site[3]-site[1]);
+ const roads=[{r:[0,480,1400,540],n:"中央大道",cls:"main",w:36,line:[[0,510],[1400,510]]},{r:[820,0,860,1000],n:"文化路",cls:"sec",w:24,line:[[840,0],[840,1000]]},{r:[300,0,330,700],n:"成功路",cls:"sec",w:18,line:[[315,0],[315,700]]},
+  {r:[0,250,1400,266],n:"12巷",cls:"lane",w:10,line:[[0,258],[1400,258]]},{r:[330,760,1400,774],n:"8巷",cls:"lane",w:8,line:[[330,767],[1400,767]]}];
+ roads.forEach(R=>{g.fillStyle="#fff";g.fillRect(R.r[0],R.r[1],R.r[2]-R.r[0],R.r[3]-R.r[1]);g.strokeStyle="#c9c3b6";g.lineWidth=1.5;g.strokeRect(R.r[0],R.r[1],R.r[2]-R.r[0],R.r[3]-R.r[1]);});
+ g.setLineDash([16,12]);g.strokeStyle="#d9d4c7";g.lineWidth=2;g.beginPath();g.moveTo(0,510);g.lineTo(1400,510);g.stroke();g.setLineDash([]);
+ g.fillStyle="#8a8375";g.font=`14px ${FONT}`;g.textBaseline="middle";
+ roads.forEach(R=>{const hz=R.r[2]-R.r[0]>R.r[3]-R.r[1];g.save();if(hz)g.translate(R.r[0]+120,(R.r[1]+R.r[3])/2);else{g.translate((R.r[0]+R.r[2])/2,R.r[1]+130);g.rotate(Math.PI/2);}g.fillText(R.n,0,0);g.restore();});
+ const ex=[[site[0]-10,site[1]-10,site[2]+10,site[3]+10],park,school];
+ const xs=[[0,300],[330,820],[860,1400]],ys=[[0,250],[266,480],[540,760],[774,1000]],blds=[];
+ xs.forEach(([x0,x1])=>ys.forEach(([y0,y1])=>{const rows=y1-y0>170?2:1;for(let r=0;r<rows;r++){const ry0=y0+8+r*(y1-y0-16)/rows,ry1=y0+8+(r+1)*(y1-y0-16)/rows;let x=x0+8;while(x<x1-40){const w=50+rnd()*70,xe=Math.min(x+w,x1-8);
+  const b=[x+4,ry0+4,xe-4,ry1-4];const hit=ex.some(e=>!(b[2]<e[0]||b[0]>e[2]||b[3]<e[1]||b[1]>e[3]))||[[b[0],b[1]],[b[2],b[1]],[b[0],b[3]],[b[2],b[3]]].some(p=>inPoly(p[0],p[1],river));
+  if(!hit&&rnd()>0.1&&xe-x>30){const depth=(b[3]-b[1])*(0.55+rnd()*0.45);const bb=r===0?[b[0],b[1],b[2],b[1]+depth]:[b[0],b[3]-depth,b[2],b[3]];blds.push({pts:[[bb[0],bb[1]],[bb[2],bb[1]],[bb[2],bb[3]],[bb[0],bb[3]]],floors:Math.round(3+rnd()*rnd()*14)});}x=xe;}}}));
+ blds.push({pts:[[school[0]+20,school[1]+10],[school[0]+200,school[1]+10],[school[0]+200,school[1]+60],[school[0]+20,school[1]+60]],floors:4});
+ blds.forEach(b=>{polyPath(g,b.pts);g.fillStyle="#bdb6a9";g.fill();g.strokeStyle="#9c9486";g.lineWidth=1;g.stroke();});
+ g.fillStyle="#5a7fa0";g.font=`bold 18px ${FONT}`;g.fillText("河川",40,900);
+ g.fillStyle="#5b8a4c";g.fillText("中央公園",950,660);g.fillStyle="#8a8375";g.font=`15px ${FONT}`;g.fillText("國小",960,300);g.fillText("空地",640,385);
+ g.fillStyle="#333";g.fillRect(1180,960,166.7,6);g.font=`12px ${FONT}`;g.fillText("0              100 m",1180,948);
+ const proj={name:"範例基地（虛構）",mpp:0.6,north:0,lat:25.03,lon:121.56,tz:8,site:[[site[0],site[1]],[site[2],site[1]],[site[2],site[3]],[site[0],site[3]]],
+  items:[...roads.map(R=>({type:"road",pts:R.line,cls:R.cls,name:R.n,width:R.w})),
+   ...blds.map(b=>({type:"bldg",pts:b.pts,floors:b.floors})),
+   {type:"ped",pts:[[880,548],[700,548],[650,470]],name:"捷運→基地"},{type:"ped",pts:[[990,560],[990,500],[780,470]],name:"公園→基地"},
+   {type:"entryCar",pts:[[720,300]],name:"車道出入口（12巷）"},{type:"entryPed",pts:[[650,465]],name:"主入口"},
+   {type:"noise",pts:[[1250,140]],db:72,name:"資源回收場"},
+   {type:"viewGood",pts:[[990,655]],name:"中央公園"},{type:"viewGood",pts:[[150,860]],name:"河岸景觀"},{type:"viewBad",pts:[[420,150]],name:"變電所"},
+   {type:"fac",pts:[[880,548]],cat:"mrt",name:"中央站"},{type:"fac",pts:[[470,548]],cat:"bus",name:"公車站"},{type:"fac",pts:[[1180,470]],cat:"bus",name:"公車站"},
+   {type:"fac",pts:[[990,320]],cat:"school",name:"國小"},{type:"fac",pts:[[1040,600]],cat:"park",name:"中央公園"},{type:"fac",pts:[[1150,420]],cat:"shop",name:"市場"},
+   {type:"fac",pts:[[420,600]],cat:"med",name:"診所"},{type:"fac",pts:[[200,420]],cat:"civic",name:"區公所"},{type:"fac",pts:[[1250,860]],cat:"culture",name:"廟宇"},{type:"fac",pts:[[600,620]],cat:"shop",name:"超市"},
+   {type:"zone",pts:[[0,440],[1400,440],[1400,580],[0,580]],zone:"com"},{type:"zone",pts:[[880,580],[1100,580],[1100,750],[880,750]],zone:"park"},{type:"zone",pts:[[880,280],[1100,280],[1100,440],[880,440]],zone:"school"},
+   {type:"zone",pts:[[0,0],[820,0],[820,440],[0,440]],zone:"res"},{type:"zone",pts:[[860,0],[1400,0],[1400,250],[860,250]],zone:"res"},{type:"zone",pts:[[330,580],[820,580],[820,1000],[330,1000]],zone:"res"},{type:"zone",pts:river,zone:"river"},
+   {type:"green",pts:[[880,560],[1100,560],[1100,750],[880,750]],name:"中央公園"},{type:"water",pts:river,name:"河川"},
+   {type:"elev",pts:[[60,960]],z:3},{type:"elev",pts:[[1340,60]],z:18},{type:"elev",pts:[[660,380]],z:9},{type:"elev",pts:[[80,80]],z:12},{type:"elev",pts:[[1340,940]],z:8},{type:"elev",pts:[[640,900]],z:5},{type:"elev",pts:[[380,520]],z:7},{type:"elev",pts:[[1050,300]],z:14},{type:"elev",pts:[[300,250]],z:10}],
+  params:{pDate:"2026-12-22",pTime:"10:00",pMass:"30",pWindPreset:"taipei",pWinW:"2",pWinS:"3",pWinWv:"",pWinSv:"",pS:"",pW:"",pO:"",pT:""}};
+ proj.img=c.toDataURL("image/png");loadProject(proj,()=>{cb&&cb();});
+}
+$("btnSample").onclick=()=>loadSample(()=>status("已載入範例基地（虛構），可直接按「生成分析圖」。"));
+
+/* ======================== v3：輸入座標自動產生底圖與圖層（需網路） ======================== */
+const ESRI=s=>(z,x,y)=>`https://server.arcgisonline.com/ArcGIS/rest/services/${s}/MapServer/tile/${z}/${y}/${x}`;
+const GEO_BASEMAPS={
+ esriTopo:{n:"Esri 淡色街道地形圖（建議）",tpl:ESRI("World_Topo_Map"),ts:256,maxZ:18,attr:"Tiles © Esri — Sources: Esri, HERE, Garmin, Intermap, increment P Corp., GEBCO, USGS, FAO, NPS, NRCAN, GeoBase, IGN, Kadaster NL, Ordnance Survey, Esri Japan, METI, Esri China (Hong Kong), (c) OpenStreetMap contributors, and the GIS User Community"},
+ esriStreet:{n:"Esri 街道圖",tpl:ESRI("World_Street_Map"),ts:256,maxZ:18,attr:"Tiles © Esri — Sources: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, Esri Japan, METI, Esri China (Hong Kong), Esri Korea, Esri (Thailand), NGCC, (c) OpenStreetMap contributors, and the GIS User Community"},
+ esri:{n:"Esri 衛星影像",tpl:ESRI("World_Imagery"),ts:256,maxZ:19,attr:"Tiles © Esri — Source: Esri, Vantor, Earthstar Geographics, and the GIS User Community"},
+ osm:{n:"OpenStreetMap 標準（可能被拒）",tpl:(z,x,y)=>`https://tile.openstreetmap.org/${z}/${x}/${y}.png`,ts:256,maxZ:19,attr:"© OpenStreetMap contributors"}
+};
+const OVERPASS=["https://overpass-api.de/api/interpreter","https://maps.mail.ru/osm/tools/overpass/api/interpreter","https://overpass.private.coffee/api/interpreter","https://overpass.kumi.systems/api/interpreter"];
+let GEO={hidden:[],cands:[],W:0,H:0};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+$("gBase").innerHTML=Object.entries(GEO_BASEMAPS).map(([k,v])=>`<option value="${k}">${v.n}</option>`).join("");
+
+/* ---- 解析 Google 地圖座標格式 ---- */
+function parseCoords(s){
+ s=String(s||"").trim();if(!s)throw new Error("請輸入座標，或貼上 Google 地圖網址。");
+ let t=s;try{t=decodeURIComponent(s.replace(/\+/g," "));}catch(e){}
+ const N="(-?\\d+(?:\\.\\d+)?)";let m;
+ const chk=(lat,lon,how,z)=>{if(!(isFinite(lat)&&isFinite(lon)))throw new Error("座標格式無法辨識。");
+  if(Math.abs(lat)>90&&Math.abs(lon)<=90)[lat,lon]=[lon,lat];
+  if(Math.abs(lat)>85||Math.abs(lon)>180)throw new Error(`座標超出範圍（緯度需在 ±85°、經度需在 ±180° 內）：${lat}, ${lon}`);
+  return {lat:+lat.toFixed(7),lon:+lon.toFixed(7),how,z:z?+z:null};};
+ if((m=t.match(new RegExp("!3d"+N+"!4d"+N))))return chk(+m[1],+m[2],"Google 地圖網址（!3d!4d 地點標記）");
+ if((m=t.match(new RegExp("@"+N+","+N+"(?:,(\\d+(?:\\.\\d+)?)z)?"))))return chk(+m[1],+m[2],"Google 地圖網址（@ 畫面中心）",m[3]);
+ if((m=t.match(new RegExp("[?&](?:q|query|ll|center|destination|daddr|sll)="+N+"\\s*,\\s*"+N))))return chk(+m[1],+m[2],"Google 地圖網址參數");
+ if(/^https?:|goo\.gl|maps\.app/i.test(t))throw new Error("這個網址裡沒有座標。Google 地圖短網址（maps.app.goo.gl）需先在瀏覽器開啟，等網址列變成完整網址（含 @緯度,經度）後再複製；或在 Google 地圖上對地點按右鍵，點第一行座標即可複製。");
+ const dms=/(-?\d+(?:\.\d+)?)\s*[°º˚度]\s*(?:(\d+(?:\.\d+)?)\s*(?:['′’‘]|分)\s*)?(?:(\d+(?:\.\d+)?)\s*(?:["″”“]|''|′′|秒)\s*)?\s*([NSEWnsew北南東西])?/g;
+ const ps=[...t.matchAll(dms)];
+ if(ps.length>=2){const v=ps.slice(0,2).map(p=>{let d=Math.abs(+p[1])+(+p[2]||0)/60+(+p[3]||0)/3600;const h=(p[4]||"").toUpperCase();if(p[1].startsWith("-")||"SW南西".includes(h)&&h)d=-d;return {d,h};});
+  let lat=v[0].d,lon=v[1].d;if("EW東西".includes(v[0].h)&&v[0].h&&"NS北南".includes(v[1].h)&&v[1].h)[lat,lon]=[lon,lat];return chk(lat,lon,"度分秒");}
+ const nums=t.match(/-?\d+(?:\.\d+)?/g);
+ if(nums&&nums.length>=2){let lat=+nums[0],lon=+nums[1];const hs=t.match(/[NSEW北南東西]/gi)||[];if(hs[0]&&/[S南]/i.test(hs[0]))lat=-Math.abs(lat);if(hs[1]&&/[W西]/i.test(hs[1]))lon=-Math.abs(lon);
+  if(hs[0]&&/[EW東西]/i.test(hs[0]))[lat,lon]=[lon,lat];return chk(lat,lon,"十進位度數");}
+ throw new Error("座標格式無法辨識。可用：「25.0330, 121.5654」、「25°01'58.8\"N 121°33'55.4\"E」或 Google 地圖網址。");
+}
+
+/* ---- Web Mercator ---- */
+const WM={X:(lon,z,ts)=>(lon+180)/360*ts*2**z,Y:(lat,z,ts)=>{const s=Math.sin(lat*RAD);return (0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*ts*2**z;},
+ lon:(X,z,ts)=>X/(ts*2**z)*360-180,lat:(Y,z,ts)=>Math.atan(Math.sinh(Math.PI*(1-2*Y/(ts*2**z))))*DEG,
+ res:(lat,z,ts)=>40075016.686*Math.cos(lat*RAD)/(ts*2**z)};
+function loadTile(url,ms=20000){return new Promise(res=>{const im=new Image();im.crossOrigin="anonymous";let done=false;const fin=v=>{if(done)return;done=true;clearTimeout(to);res(v);};const to=setTimeout(()=>fin(null),ms);im.onload=()=>fin(im);im.onerror=()=>fin(null);im.referrerPolicy="strict-origin-when-cross-origin";im.src=url;});}
+
+async function geoBasemap(lat,lon,radius,key,msg){
+ const B=GEO_BASEMAPS[key]||GEO_BASEMAPS.esriTopo,W=1600,H=1200,tm=2*radius*1.2/H;
+ let z=0;for(z=1;z<B.maxZ;z++)if(WM.res(lat,z,B.ts)<=tm)break;
+ const res=WM.res(lat,z,B.ts),s=res/tm,Xc=WM.X(lon,z,B.ts),Yc=WM.Y(lat,z,B.ts),X0=Math.floor(Xc-W/(2*s)),Y0=Math.floor(Yc-H/(2*s)),NW=Math.ceil(W/s)+2,NH=Math.ceil(H/s)+2;
+ const nat=document.createElement("canvas");nat.width=NW;nat.height=NH;const g=nat.getContext("2d");g.fillStyle="#e9ecef";g.fillRect(0,0,NW,NH);
+ const jobs=[];for(let ty=Math.floor(Y0/B.ts);ty<=Math.floor((Y0+NH)/B.ts);ty++)for(let tx=Math.floor(X0/B.ts);tx<=Math.floor((X0+NW)/B.ts);tx++)jobs.push([tx,ty]);
+ let ok=0,fail=0,qi=0;const n=2**z;
+ const worker=async()=>{while(qi<jobs.length){const [tx,ty]=jobs[qi++];const im=await loadTile(B.tpl(z,((tx%n)+n)%n,ty));if(im){g.drawImage(im,tx*B.ts-X0,ty*B.ts-Y0,B.ts,B.ts);ok++;}else fail++;msg(`下載底圖瓦片 ${ok+fail}/${jobs.length}（縮放層級 z${z}）…`);}};
+ await Promise.all(Array.from({length:8},worker));
+ if(ok===0)throw new Error(`底圖瓦片全部下載失敗（0/${jobs.length}）。請確認電腦有連上網路，或換一個底圖來源再試。`);
+ const out=document.createElement("canvas");out.width=W;out.height=H;const o=out.getContext("2d");o.imageSmoothingQuality="high";o.drawImage(nat,0,0,NW,NH,0,0,NW*s,NH*s);
+ let url;try{url=out.toDataURL("image/jpeg",0.92);}catch(e){throw new Error("瀏覽器基於安全限制（CORS）禁止讀取底圖影像，無法匯出。請改用其他底圖來源，或改用 Chrome／Edge 開啟本檔案。");}
+ const toPx=(la,lo)=>[(WM.X(lo,z,B.ts)-X0)*s,(WM.Y(la,z,B.ts)-Y0)*s];
+ const toLL=(x,y)=>[WM.lat(Y0+y/s,z,B.ts),WM.lon(X0+x/s,z,B.ts)];
+ return {url,W,H,mpp:tm,z,toPx,toLL,ok,fail,total:jobs.length,B};
+}
+
+/* ---- Overpass API ---- */
+async function overpass(q,msg){
+ let last="";
+ for(let round=0;round<2;round++)for(let i=0;i<OVERPASS.length;i++){for(let a=0;a<1;a++){
+  msg(`下載 OpenStreetMap 資料中…（伺服器 ${i+1}/${OVERPASS.length}${round?"，第 2 輪重試":""}；公用伺服器常需 20–60 秒，請稍候）`);
+  try{const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),75000);
+   const r=await fetch(OVERPASS[i],{method:"POST",body:"data="+encodeURIComponent(q),headers:{"Content-Type":"application/x-www-form-urlencoded"},signal:ctl.signal});clearTimeout(to);
+   if(r.ok){const j=await r.json();if(j.remark&&/error|timed out|runtime/i.test(j.remark)&&!(j.elements||[]).length){last="伺服器回報："+j.remark.slice(0,80);continue;}return {json:j,server:OVERPASS[i]};}
+   last=`HTTP ${r.status}${r.status===429?"（請求過於頻繁）":r.status>=500?"（伺服器忙碌）":""}`;if(r.status===400)break;await sleep(1500);
+  }catch(e){last=e.name==="AbortError"?"連線逾時":(e.message||String(e));}
+ }}
+ throw new Error(`無法從 Overpass API 取得 OpenStreetMap 資料（最後錯誤：${last}）。可能原因：網路未連線、公用伺服器暫時忙碌（常見，請等 1–2 分鐘再按一次），或範圍太大（請改用較小半徑）。底圖已載入，仍可手動標記。`);
+}
+function joinRings(segs){const eq=(a,b)=>Math.abs(a[0]-b[0])<1e-9&&Math.abs(a[1]-b[1])<1e-9,rings=[];segs=segs.filter(s=>s.length>1).map(s=>s.slice());
+ while(segs.length){let cur=segs.shift(),g=0;while(!eq(cur[0],cur[cur.length-1])&&g++<2000){const e=cur[cur.length-1];const i=segs.findIndex(s=>eq(s[0],e)||eq(s[s.length-1],e));if(i<0)break;let s=segs.splice(i,1)[0];if(!eq(s[0],e))s.reverse();cur=cur.concat(s.slice(1));}
+  if(cur.length>=4&&eq(cur[0],cur[cur.length-1]))rings.push(cur);}return rings;}
+function mergeLines(lines){const eq=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1])<0.5,out=[];lines=lines.map(l=>l.slice());
+ while(lines.length){let cur=lines.shift(),grew=true;while(grew){grew=false;for(let i=0;i<lines.length;i++){const s=lines[i];let m=null;
+   if(eq(cur[cur.length-1],s[0]))m=cur.concat(s.slice(1));else if(eq(cur[cur.length-1],s[s.length-1]))m=cur.concat(s.slice().reverse().slice(1));else if(eq(cur[0],s[s.length-1]))m=s.concat(cur.slice(1));else if(eq(cur[0],s[0]))m=s.slice().reverse().concat(cur.slice(1));
+   if(m){cur=m;lines.splice(i,1);grew=true;break;}}}out.push(cur);}return out;}
+function bufferLine(pts,w){const A=[],B=[];for(let i=0;i<pts.length;i++){const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)],dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy)||1,nx=-dy/l*w/2,ny=dx/l*w/2;A.push([pts[i][0]+nx,pts[i][1]+ny]);B.push([pts[i][0]-nx,pts[i][1]-ny]);}return A.concat(B.reverse());}
+const num=v=>{const x=parseFloat(String(v||"").replace(",","."));return isFinite(x)?x:null;};
+
+function geoQuery(bb){const [s,w,n,e]=bb.map(v=>v.toFixed(6));
+ return `[out:json][timeout:60][bbox:${s},${w},${n},${e}];
+(
+ way["building"];relation["building"]["type"="multipolygon"];
+ way["highway"];
+ way["leisure"~"^(park|garden|playground|pitch|nature_reserve|common|golf_course|sports_centre)$"];relation["leisure"~"^(park|garden|nature_reserve)$"];
+ way["landuse"~"^(grass|forest|recreation_ground|meadow|village_green|cemetery|orchard|farmland|residential|commercial|retail|industrial|education|religious|military|reservoir|basin)$"];relation["landuse"~"^(forest|residential|commercial|retail|industrial|education|reservoir)$"];
+ way["natural"~"^(wood|scrub|grassland|heath|water|wetland)$"];relation["natural"~"^(water|wood)$"];
+ way["waterway"~"^(river|canal|stream|riverbank)$"];relation["waterway"="riverbank"];way["water"];
+ way["amenity"~"^(school|university|college|kindergarten|hospital|townhall|parking)$"];
+ nwr["amenity"~"^(school|university|college|kindergarten|hospital|clinic|doctors|police|townhall|post_office|fire_station|courthouse|library|place_of_worship|community_centre|bus_station|marketplace|theatre|arts_centre|parking)$"];
+ nwr["shop"~"^(convenience|supermarket|mall|department_store)$"];nwr["tourism"="museum"];
+ nwr["railway"~"^(station|halt|subway_entrance|tram_stop)$"];node["public_transport"="station"];node["highway"="bus_stop"];
+);
+out geom qt;`;}
+
+/* ---- OSM → 工具圖層 ---- */
+function osmToItems(json,G,opt){
+ const W=G.W,H=G.H,mp=G.mpp,P2=(la,lo)=>G.toPx(la,lo),fh=+$("pFloorH").value||3.3,defF=Math.max(1,+$("gDefF").value||4);
+ const inView=pts=>{const b=bbox(pts);return !(b[2]<-40||b[0]>W+40||b[3]<-40||b[1]>H+40);};
+ const polysOf=el=>{if(el.type==="way"&&el.geometry){const g=el.geometry.filter(Boolean).map(p=>[p.lat,p.lon]);if(g.length>=4&&g[0][0]===g[g.length-1][0]&&g[0][1]===g[g.length-1][1])return [g.slice(0,-1).map(p=>P2(...p))];return [];}
+  if(el.type==="relation"&&el.members)return joinRings(el.members.filter(m=>m.type==="way"&&m.geometry&&m.role!=="inner").map(m=>m.geometry.filter(Boolean).map(p=>[p.lat,p.lon]))).map(r=>r.slice(0,-1).map(p=>P2(...p)));return [];};
+ const lineOf=el=>el.type==="way"&&el.geometry?el.geometry.filter(Boolean).map(p=>P2(p.lat,p.lon)):null;
+ const ptOf=el=>{if(el.type==="node")return P2(el.lat,el.lon);const ps=polysOf(el);if(ps.length)return polyCentroid(ps[0]);const l=lineOf(el);if(l&&l.length)return l[Math.floor(l.length/2)];if(el.bounds)return P2((el.bounds.minlat+el.bounds.maxlat)/2,(el.bounds.minlon+el.bounds.maxlon)/2);return null;};
+ const nm=t=>t.name||t["name:zh"]||t["name:zh-Hant"]||"";
+ const out={bldg:[],road:[],ped:[],green:[],water:[],zone:[],fac:[],areas:[]},estN={n:0};const roadSeg={};const ents=[];
+ const under=t=>t.location==="underground"||(num(t.layer)!=null&&num(t.layer)<0)||t.tunnel==="yes"||t.tunnel==="culvert"||t.indoor==="yes";
+ for(const el of json.elements||[]){const t=el.tags||{};
+  // 建築
+  if(t.building&&t.building!=="no"&&!(t.location==="underground")){for(const pts of polysOf(el)){if(pts.length<3||!inView(pts))continue;const area=polyArea(pts)*mp*mp;if(area<8)continue;
+    const lv=num(t["building:levels"]),h=num(t.height);let floors,est=false;
+    if(lv&&lv>0)floors=Math.round(lv);else if(h&&h>0)floors=Math.max(1,Math.round(h/fh));else{est=true;floors=/^(roof|carport|shed|garage|garages|hut|kiosk|toilets)$/.test(t.building)?1:/^(house|detached|bungalow|semidetached_house)$/.test(t.building)?2:defF;}
+    const it={type:"bldg",pts,floors,src:"osm"};if(h&&h>0)it.h=h;if(est){it.est=true;estN.n++;}if(nm(t))it.name=nm(t);out.bldg.push(it);
+    out.areas.push({pts,kind:"建築",name:nm(t)||"（未命名建築）",extra:`${floors} 層${est?"（估）":""}`,area,bldg:true});}}
+  const isB=!!(t.building&&t.building!=="no");
+  // 道路
+  if(t.highway&&el.type==="way"&&t.area!=="yes"){const hw=t.highway.replace(/_link$/,"");if(under(t))continue;const pts=lineOf(el);if(!pts||pts.length<2||!inView(pts))continue;
+   let cls=null;if(/^(motorway|trunk|primary)$/.test(hw))cls="main";else if(/^(secondary|tertiary)$/.test(hw))cls="sec";else if(/^(residential|unclassified|living_street|road)$/.test(hw)||(hw==="service"&&!/^(parking_aisle|driveway|drive-through)$/.test(t.service||"")&&(nm(t)||plLen(pts)*mp>60)))cls="lane";
+   if(cls){let w=num(t.width);if(!w){const ln=num(t.lanes);w=ln?Math.round(ln*3.3+2):cls==="main"?28:cls==="sec"?16:8;}let p=pts;const ow=t.oneway==="yes"||t.oneway==="1"||t.oneway==="-1"||t.junction==="roundabout";if(t.oneway==="-1")p=pts.slice().reverse();
+    const key=[cls,nm(t),w,ow?1:0].join("|");(roadSeg[key]=roadSeg[key]||{cls,name:nm(t),width:w,oneway:ow,lines:[]}).lines.push(p);continue;}
+   if(opt.ped&&/^(pedestrian|footway|path|steps)$/.test(hw)&&!/^(sidewalk|crossing|access_aisle|traffic_island)$/.test(t.footway||"")){if(plLen(pts)*mp>=15)out.ped.push({type:"ped",pts,name:nm(t),src:"osm"});}continue;}
+  if(!isB){
+  // 水體
+  const waterPoly=t.natural==="water"||t.waterway==="riverbank"||/^(reservoir|basin)$/.test(t.landuse||"")||(t.water&&el.type==="way"&&!t.waterway);
+  if(waterPoly){if(t.water==="fountain"||t.amenity==="fountain")continue;for(const pts of polysOf(el))if(pts.length>=3&&inView(pts)&&polyArea(pts)*mp*mp>150)out.water.push({type:"water",pts,name:nm(t),src:"osm"});continue;}
+  if(t.waterway&&/^(river|canal|stream)$/.test(t.waterway)&&el.type==="way"){if(under(t))continue;const pts=lineOf(el);if(!pts||pts.length<2||!inView(pts))continue;const w=num(t.width)||({river:30,canal:10,stream:4})[t.waterway];out.water.push({type:"water",pts:bufferLine(pts,Math.max(2,w/mp)),name:nm(t),src:"osm"});continue;}
+  // 綠地
+  const green=/^(park|garden|playground|pitch|nature_reserve|common|golf_course)$/.test(t.leisure||"")||/^(grass|forest|recreation_ground|meadow|village_green|cemetery|orchard|farmland)$/.test(t.landuse||"")||/^(wood|scrub|grassland|heath|wetland)$/.test(t.natural||"");
+  if(green){for(const pts of polysOf(el)){if(pts.length<3||!inView(pts))continue;const area=polyArea(pts)*mp*mp;if(area<40)continue;out.green.push({type:"green",pts,name:nm(t),src:"osm"});if(area>=300)out.areas.push({pts,kind:"綠地",name:nm(t)||"（未命名綠地）",area});}}
+  // 土地使用（OSM landuse 推估）
+  const zmap={residential:"res",commercial:"com",retail:"com",industrial:"ind",education:"school",military:"civic"};let zk=zmap[t.landuse]||(/^(school|university|college|kindergarten)$/.test(t.amenity||"")?"school":t.amenity==="townhall"||t.amenity==="hospital"?"civic":t.leisure==="park"?"park":null);
+  if(zk&&el.type!=="node"){for(const pts of polysOf(el)){if(pts.length<3||!inView(pts))continue;const area=polyArea(pts)*mp*mp;if(area<300)continue;if(opt.zone)out.zone.push({type:"zone",pts,zone:zk,src:"osm"});
+    out.areas.push({pts,kind:t.amenity?"地塊":"土地使用",name:nm(t)||ZONE[zk].n,area});}}
+  else if(t.amenity==="parking"&&el.type!=="node"){for(const pts of polysOf(el)){const area=polyArea(pts)*mp*mp;if(area>=150&&inView(pts))out.areas.push({pts,kind:"地塊",name:nm(t)||"停車場",area});}}
+  }
+  // 周邊設施
+  let cat=null;const am=t.amenity||"";
+  if(t.railway==="subway_entrance"){const p=ptOf(el);if(p)ents.push({p,name:nm(t)});continue;}
+  if(/^(station|halt|tram_stop)$/.test(t.railway||"")||(t.public_transport==="station"&&t.bus!=="yes"))cat="mrt";
+  else if(t.highway==="bus_stop"||am==="bus_station"||(t.public_transport==="station"&&t.bus==="yes"))cat="bus";
+  else if(/^(school|university|college|kindergarten)$/.test(am))cat="school";
+  else if(t.leisure==="park"&&nm(t))cat="park";
+  else if(/^(convenience|supermarket|mall|department_store)$/.test(t.shop||"")||am==="marketplace")cat="shop";
+  else if(/^(hospital|clinic|doctors)$/.test(am))cat="med";
+  else if(/^(townhall|police|post_office|fire_station|courthouse|community_centre)$/.test(am))cat="civic";
+  else if(/^(place_of_worship|library|theatre|arts_centre)$/.test(am)||t.tourism==="museum")cat="culture";
+  else if(am==="parking")cat="parking";
+  if(cat){if(cat==="park"&&el.type==="node")continue;const p=ptOf(el);if(p&&p[0]>=0&&p[1]>=0&&p[0]<=W&&p[1]<=H){if(cat==="parking"&&el.type!=="node"){const ps=polysOf(el);if(ps.length&&polyArea(ps[0])*mp*mp<200)continue;}
+   out.fac.push({type:"fac",pts:[p],cat,name:nm(t)||(cat==="shop"&&t.shop==="convenience"?"超商":""),src:"osm"});}}
+ }
+ // 道路：同名同級接續段合併
+ Object.values(roadSeg).forEach(R=>mergeLines(R.lines).forEach(pts=>{if(plLen(pts)*mp<12)return;out.road.push({type:"road",pts,cls:R.cls,name:R.name,width:R.width,oneway:R.oneway,src:"osm"});}));
+ // 捷運出口：只在畫面內沒有車站時使用
+ if(!out.fac.some(f=>f.cat==="mrt")){const keep=[];ents.forEach(e=>{if(e.p[0]<0||e.p[1]<0||e.p[0]>W||e.p[1]>H)return;if(!keep.some(k=>Math.hypot(k.p[0]-e.p[0],k.p[1]-e.p[1])*mp<150))keep.push(e);});keep.slice(0,4).forEach(e=>out.fac.push({type:"fac",pts:[e.p],cat:"mrt",name:(e.name||"捷運")+" 出入口",src:"osm"}));}
+ // 設施去重＋限量（依距離中心排序）
+ const cx=W/2,cy=H/2,cap={bus:12,shop:14,parking:6,mrt:6,school:10,med:10,civic:10,culture:10,park:8},cnt={},fac=[];
+ out.fac.map(f=>({f,d:Math.hypot(f.pts[0][0]-cx,f.pts[0][1]-cy)})).sort((a,b)=>a.d-b.d).forEach(({f})=>{const near=fac.some(g=>g.cat===f.cat&&(g.name||"")===(f.name||"")&&Math.hypot(g.pts[0][0]-f.pts[0][0],g.pts[0][1]-f.pts[0][1])*mp<(f.cat==="bus"?90:f.cat==="mrt"?250:60));
+  if(near)return;cnt[f.cat]=(cnt[f.cat]||0)+1;if(cnt[f.cat]>cap[f.cat])return;fac.push(f);});
+ out.fac=fac.slice(0,70);
+ out.ped=out.ped.filter(p=>Math.hypot(...[0,1].map(j=>polyCentroid(p.pts)[j]-[cx,cy][j]))<Math.min(W,H)*0.5).slice(0,25);
+ out.estN=estN.n;return out;
+}
+
+/* ---- 高程（Open-Meteo，Copernicus DEM 90 m） ---- */
+async function geoElev(G){const nx=10,ny=8,pts=[];for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)pts.push([(i+0.5)/nx*G.W,(j+0.5)/ny*G.H]);
+ const ll=pts.map(p=>G.toLL(...p));const url=`https://api.open-meteo.com/v1/elevation?latitude=${ll.map(a=>a[0].toFixed(5)).join(",")}&longitude=${ll.map(a=>a[1].toFixed(5)).join(",")}`;
+ const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),20000);const r=await fetch(url,{signal:ctl.signal});clearTimeout(to);if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();
+ if(!j.elevation||j.elevation.length!==pts.length)throw new Error("回傳格式不符");return pts.map((p,i)=>({type:"elev",pts:[p],z:Math.round(j.elevation[i]*10)/10,src:"dem"}));}
+
+/* ---- 基地範圍 ---- */
+function geoRect(){const m=String($("gRect").value||"40x30").match(/(\d+(?:\.\d+)?)\D+(\d+(?:\.\d+)?)/)||[0,40,30];const w=m2px(+m[1])/2,h=m2px(+m[2])/2,cx=GEO.W/2,cy=GEO.H/2;return [[cx-w,cy-h],[cx+w,cy-h],[cx+w,cy+h],[cx-w,cy+h]];}
+function geoApplySite(poly,desc){
+ if(GEO.hidden.length){P.items.push(...GEO.hidden);GEO.hidden=[];}
+ P.site=poly.map(p=>[+p[0].toFixed(1),+p[1].toFixed(1)]);
+ if($("gDemo").checked){const keep=[];P.items.forEach(it=>{if(it.type==="bldg"){const [x,y]=polyCentroid(it.pts);if(inPoly(x,y,P.site)){GEO.hidden.push(it);return;}}keep.push(it);});P.items=keep;}
+ OUT=[];$("gallery").innerHTML="";render();
+ const a=polyArea(P.site)*mpp()*mpp();status(`基地範圍：${desc}，約 ${Math.round(a).toLocaleString()} m²${GEO.hidden.length?`（基地內 ${GEO.hidden.length} 棟既有建築視為拆除，不計陰影）`:""}。可用「基地範圍」工具重畫。`);
+ document.querySelectorAll("#gSite button").forEach(b=>b.classList.toggle("on",b.dataset.desc===desc));
+}
+function geoSiteButtons(){const box=$("gSite");box.innerHTML="";const add=(txt,desc,fn)=>{const b=document.createElement("button");b.textContent=txt;b.dataset.desc=desc;b.style.cssText="width:100%;margin-top:4px;text-align:left";b.onclick=fn;box.appendChild(b);};
+ GEO.cands.forEach(c=>{const d=`${c.kind}「${c.name}」`;add(`以此作為基地範圍：${d}${c.extra?" "+c.extra:""}，${c.area>=10000?(c.area/10000).toFixed(2)+" 公頃":Math.round(c.area).toLocaleString()+" m²"}`,d,()=>geoApplySite(c.pts,d));});
+ const rd=`預設矩形 ${$("gRect").value} m`;add(`使用${rd}（置於座標處）`,rd,()=>geoApplySite(geoRect(),rd));}
+
+/* ---- 主流程 ---- */
+async function geoImport(input,o={}){
+ const msg=(s,err)=>{$("gMsg").innerHTML=err?`<span style="color:#c92a2a"><b>錯誤：</b>${s}</span>`:s;};
+ const warn=[];let C;
+ try{C=parseCoords(input!=null?input:$("gIn").value);}catch(e){msg(e.message,true);throw e;}
+ const radius=+(o.radius||$("gR").value)||250,key=o.base||$("gBase").value;if(o.radius)$("gR").value=o.radius;if(o.base)$("gBase").value=o.base;
+ msg(`已辨識座標 ${C.lat}, ${C.lon}（${C.how}）。準備底圖…`);
+ let G;try{G=await geoBasemap(C.lat,C.lon,radius,key,msg);}catch(e){const m=e.message.includes("底圖")||e.message.includes("CORS")?e.message:"下載底圖失敗："+e.message;msg(m,true);throw new Error(m);}
+ if(G.fail)warn.push(`${G.fail} 張底圖瓦片下載失敗（以灰色顯示）`);
+ GEO={hidden:[],cands:[],W:G.W,H:G.H,G};
+ const inTW=C.lat>21.5&&C.lat<26.5&&C.lon>118&&C.lon<123;
+ const tz=inTW?8:Math.round(C.lon/15*2)/2;
+ const geo={lat:C.lat,lon:C.lon,radius,zoom:G.z,base:key,baseAttr:G.B.attr,time:new Date().toISOString(),how:C.how};
+ P=Object.assign(newProject(),{name:`座標 ${C.lat.toFixed(5)}, ${C.lon.toFixed(5)}`,mpp:G.mpp,north:0,lat:+C.lat.toFixed(5),lon:+C.lon.toFixed(5),tz,geo});
+ readParamsOnly();
+ if(C.lat>24.95&&C.lat<25.2&&C.lon>121.4&&C.lon<121.7){$("pWindPreset").value="taipei";applyWindPreset();}else if(inTW){$("pWindPreset").value="cwa";applyWindPreset();}else warn.push("座標不在台灣：風向預設值不適用，請在步驟 4 自行輸入風向；時區已依經度估為 UTC+"+tz);
+ readParamsOnly();
+ await new Promise(r=>{P.img=null;setImage(G.url,r);});syncInputs();$("gallery").innerHTML="";OUT=[];
+ const want={bldg:$("gBldg").checked,road:$("gRoad").checked,ped:$("gPed").checked,green:$("gGreen").checked,water:$("gWater").checked,fac:$("gFac").checked,zone:$("gZone").checked,elev:$("gElev").checked,view:$("gView").checked};
+ let O=null,osmErr=null;
+ if(want.bldg||want.road||want.ped||want.green||want.water||want.fac||want.zone){
+  const c0=G.toLL(0,G.H),c1=G.toLL(G.W,0);
+  try{const r=await overpass(geoQuery([c0[0],c0[1],c1[0],c1[1]]),msg);geo.server=r.server;geo.osmTime=(r.json.osm3s&&r.json.osm3s.timestamp_osm_base)||"";msg("整理 OSM 圖層…");await sleep(20);O=osmToItems(r.json,{W:G.W,H:G.H,mpp:G.mpp,toPx:G.toPx},{ped:want.ped,zone:want.zone});}
+  catch(e){osmErr=e.message;}
+ }
+ const add=[];
+ if(O){if(want.zone)add.push(...O.zone);if(want.green)add.push(...O.green);if(want.water)add.push(...O.water);if(want.bldg)add.push(...O.bldg);if(want.road)add.push(...O.road);if(want.ped)add.push(...O.ped);if(want.fac)add.push(...O.fac);
+  geo.counts={bldg:want.bldg?O.bldg.length:0,road:want.road?O.road.length:0,ped:want.ped?O.ped.length:0,green:want.green?O.green.length:0,water:want.water?O.water.length:0,fac:want.fac?O.fac.length:0,zone:want.zone?O.zone.length:0};geo.est=want.bldg?O.estN:0;
+  const cx=G.W/2,cy=G.H/2;GEO.cands=O.areas.filter(a=>inPoly(cx,cy,a.pts)&&a.area<G.W*G.H*G.mpp*G.mpp*0.5).sort((a,b)=>a.area-b.area).filter((a,i,arr)=>arr.findIndex(b=>Math.abs(b.area-a.area)<1&&b.name===a.name)===i).slice(0,5);
+  if(want.view){const big=(arr,nm0)=>{const a=arr.map(g=>({g,a:polyArea(g.pts)})).filter(x=>x.a*G.mpp*G.mpp>=1500&&!inPoly(cx,cy,x.g.pts)).sort((p,q)=>q.a-p.a)[0];if(!a)return null;let [x,y]=polyCentroid(a.g.pts);if(!inPoly(x,y,a.g.pts)||x<0||y<0||x>G.W||y>G.H){let b=null,bd=1e12;a.g.pts.forEach(p=>{if(p[0]<0||p[1]<0||p[0]>G.W||p[1]>G.H)return;const d=Math.hypot(p[0]-cx,p[1]-cy);if(d<bd){bd=d;b=p;}});if(!b)return null;[x,y]=b;}return {type:"viewGood",pts:[[x,y]],name:a.g.name||nm0,src:"osm"};};
+   const v1=want.green&&big(O.green,"綠地"),v2=want.water&&big(O.water,"水岸");[v1,v2].forEach(v=>v&&add.push(v));
+   const tall=(want.bldg?O.bldg:[]).filter(b=>b.floors>=20&&!inPoly(cx,cy,b.pts)).sort((a,b)=>(b.h||b.floors*3.3)-(a.h||a.floors*3.3))[0];if(tall)add.push({type:"viewGood",pts:[polyCentroid(tall.pts)],name:"地標："+(tall.name||`${tall.floors} 層高樓`),src:"osm"});}
+ }
+ if(want.elev){msg("下載高程資料（Open-Meteo）…");try{add.push(...await geoElev(G));geo.elev=true;geo.demGrid=[10,8];}catch(e){warn.push("高程資料下載失敗（"+e.message+"），地形圖需手動標高程點");}}
+ geo.attr=`底圖 ${G.B.attr}`+(O?"｜圖資 © OpenStreetMap contributors (ODbL)":"")+(geo.elev?"｜高程 Copernicus DEM GLO-90 via Open-Meteo":"");
+ P.items=add;P.geo=geo;
+ const b0=GEO.cands.find(c=>c.bldg);geoSiteButtons();
+ if(b0){geoApplySite(b0.pts,`${b0.kind}「${b0.name}」`);if(!/未命名/.test(b0.name)){P.name=b0.name+" 基地";$("pName").value=P.name;}}else geoApplySite(geoRect(),`預設矩形 ${$("gRect").value} m`);
+ const cn=geo.counts||{};
+ const sum=O?`已匯入：建築 ${cn.bldg}（${geo.est} 棟樓層為估計值）、道路 ${cn.road}、人行步道 ${cn.ped}、綠地 ${cn.green}、水體 ${cn.water}、設施 ${cn.fac}、土地使用 ${cn.zone}${geo.elev?"、高程格點 80":""}。`:"";
+ msg(`<b>完成</b>：${C.lat}, ${C.lon}（${C.how}），半徑 ${radius} m，比例 ${G.mpp.toFixed(3)} m/px（Web Mercator z${G.z}，已含緯度修正），北向 0°。${sum}`+(osmErr?`<br><span style="color:#c92a2a"><b>OSM 圖層未匯入：</b>${osmErr}</span>`:"")+(warn.length?`<br><span style="color:#b35c00">注意：${warn.join("；")}</span>`:"")+(GEO.cands.length?"<br>座標位於下列建築／地塊內，可點選改用為基地範圍：":"<br>座標不在 OSM 建築或地塊內，已放置預設矩形基地，可點下方按鈕或用「基地範圍」工具重畫："));
+ return {coords:C,mpp:G.mpp,zoom:G.z,tiles:[G.ok,G.total],counts:geo.counts||null,est:geo.est||0,osmErr,warn,cands:GEO.cands.map(c=>c.kind+":"+c.name+":"+Math.round(c.area)),site:P.site.length,attr:geo.attr};
+}
+$("btnGeo").onclick=async()=>{const b=$("btnGeo");b.disabled=true;b.textContent="處理中…";try{await geoImport();}catch(e){console.warn(e);}finally{b.disabled=false;b.textContent="📍 依座標產生底圖並匯入";}};
+$("gIn").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnGeo").click();});
+
+/* ---- 編輯既有元素屬性 ---- */
+function pickAt(p){const tol=16*stage.width/stage.getBoundingClientRect().width;let best=-1,bd=1e9;
+ P.items.forEach((it,i)=>{let d;if(it.pts.length===1)d=Math.hypot(p[0]-it.pts[0][0],p[1]-it.pts[0][1]);else if(["road","ped"].includes(it.type))d=distPolyline(p[0],p[1],it.pts);else d=inPoly(p[0],p[1],it.pts)?tol*0.9:distPolyline(p[0],p[1],[...it.pts,it.pts[0]]);if(it.pts.length===1)d-=4;if(d<bd){bd=d;best=i;}});
+ return best>=0&&bd<tol?P.items[best]:null;}
+function editAt(p){const it=pickAt(p);if(!it){status("此處沒有元素");return;}
+ const ask=(q,v)=>{const r=prompt(q,v==null?"":v);return r===null?null:r;};
+ if(it.type==="bldg"){const r=ask(`建築樓層數${it.est?"（目前為估計值）":""}${it.h?`，OSM 高度 ${it.h} m`:""}`,it.floors);if(r!==null&&+r>0){it.floors=Math.round(+r);it.est=false;delete it.h;}}
+ else if(it.type==="road"){const r=ask("道路等級：1＝主要幹道、2＝次要道路、3＝巷道",{main:1,sec:2,lane:3}[it.cls]);if(r!==null&&["1","2","3"].includes(r.trim()))it.cls=["main","sec","lane"][+r-1];const n=ask("道路名稱",it.name);if(n!==null)it.name=n;const w=ask("路寬 (m)",it.width);if(w!==null&&+w>0)it.width=+w;}
+ else if(it.type==="fac"){const r=ask("設施類型代碼："+Object.entries(FAC).map(([k,v])=>k+"="+v.n).join("、"),it.cat);if(r!==null&&FAC[r.trim()])it.cat=r.trim();const n=ask("名稱",it.name);if(n!==null)it.name=n;}
+ else if(it.type==="zone"){const r=ask("分區代碼："+Object.entries(ZONE).map(([k,v])=>k+"="+v.n).join("、"),it.zone);if(r!==null&&ZONE[r.trim()])it.zone=r.trim();}
+ else if(it.type==="elev"){const r=ask("高程 (m)",it.z);if(r!==null&&isFinite(+r))it.z=+r;}
+ else if(it.type==="noise"){const n=ask("名稱",it.name);if(n!==null)it.name=n;const r=ask("距 10 m 音量 dB(A)",it.db);if(r!==null&&+r>0)it.db=+r;}
+ else{const n=ask("名稱",it.name);if(n!==null)it.name=n;}
+ render();status("已更新屬性");}
+
+window.SA={geoImport,parseCoords,editAt,loadSample,loadProject,generate,makeBoard,buildZip,getProject:()=>P,setTool,finishShape,handleClick,swotSuggest};
+setTool("none");
+</script>
+</body></html>
